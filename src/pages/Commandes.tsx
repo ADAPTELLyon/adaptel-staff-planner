@@ -368,7 +368,7 @@ const Commandes = () => {
                 Semaine {currentWeek}
               </th>
               {weekDates.map((day, index) => (
-                <th key={index} className="p-3 text-center text-sm font-medium text-gray-600 relative">
+                <th key={index} className="p-3 text-center text-sm font-medium text-gray-600">
                   <div className="text-center">{day.jourNom} {day.numero} {day.mois}</div>
                   <div className="h-6 mt-1 flex justify-center">
                     {day.enRecherche > 0 && (
@@ -392,20 +392,22 @@ const Commandes = () => {
               filteredCommandes.map((commande) => (
                 <tr key={commande.id}>
                   <td className="p-3 align-top">
-                    <div className="flex flex-col">
-                      <div className="font-medium">{commande.client_nom}</div>
-                      {commande.secteur && (
-                        <Badge variant="outline" className="mt-1 w-fit">
-                          {commande.secteur}
-                        </Badge>
-                      )}
-                      <div className="text-xs text-gray-500 mt-1">
-                        Semaine {commande.semaine}
+                    <div className="flex flex-col justify-between h-full">
+                      <div>
+                        <div className="font-medium">{commande.client_nom}</div>
+                        {commande.secteur && (
+                          <Badge variant="outline" className="mt-1 w-fit">
+                            {commande.secteur}
+                          </Badge>
+                        )}
+                        <div className="text-xs text-gray-500 mt-1">
+                          Semaine {commande.semaine}
+                        </div>
                       </div>
                       <Button 
                         size="sm" 
                         variant="ghost" 
-                        className="mt-2 p-2 h-auto w-auto"
+                        className="mt-2 p-2 h-auto w-fit"
                         title="Éditer cette commande"
                       >
                         <Edit className="h-4 w-4" />
@@ -418,53 +420,58 @@ const Commandes = () => {
                     return (
                       <td 
                         key={dayIndex} 
-                        className="p-2 align-top relative"
+                        className="p-2 align-top relative h-24"
                       >
                         {jour && (
                           <div 
-                            className={`rounded p-2 h-full w-full ${getDayClass(jour)} cursor-pointer`}
+                            className={`${getDayClass(jour)} p-2 absolute top-2 right-2 bottom-2 left-2 rounded cursor-pointer`}
                             onClick={() => handleMissionEdit(commande, jour)}
                           >
-                            {jour.candidat ? (
-                              <div className="text-sm font-medium mb-2 line-clamp-2">
-                                {jour.candidat}
-                              </div>
-                            ) : (
+                            <div className="relative h-full flex flex-col">
+                              {/* Status at the top */}
                               <div className="text-sm font-medium mb-2">
-                                {jour.statut === "En recherche" ? "En recherche" : jour.statut}
+                                {jour.statut}
                               </div>
-                            )}
-                            
-                            {jour.creneaux && jour.creneaux.length > 0 && (
-                              <div className="space-y-2 text-xs">
-                                {/* Premier créneau (toujours affiché) */}
-                                <div className="grid grid-cols-2 gap-1">
-                                  {jour.creneaux[0]?.split('-').map((time, idx) => (
-                                    <div key={idx} className="font-mono">{time.trim()}</div>
-                                  ))}
-                                </div>
+                              
+                              {/* Times */}
+                              <div className="space-y-2 text-xs flex-grow">
+                                {jour.creneaux && jour.creneaux.length > 0 && (
+                                  <div className="grid grid-cols-2 gap-1">
+                                    {jour.creneaux[0]?.split('-').map((time, idx) => (
+                                      <div key={idx} className="font-mono">{time.trim()}</div>
+                                    ))}
+                                  </div>
+                                )}
                                 
-                                {/* Second créneau (affiché s'il existe, sinon espace vide) */}
+                                {/* Second timeframe or empty space */}
                                 <div className="grid grid-cols-2 gap-1 h-4">
-                                  {jour.creneaux.length > 1 && jour.creneaux[1]?.split('-').map((time, idx) => (
+                                  {jour.creneaux && jour.creneaux.length > 1 && jour.creneaux[1]?.split('-').map((time, idx) => (
                                     <div key={idx} className="font-mono">{time.trim()}</div>
                                   ))}
                                 </div>
                               </div>
-                            )}
-                            
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              className="absolute top-1 right-1 h-6 w-6 p-0 bg-white shadow-sm"
-                              title="Planifier un candidat"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleMissionEdit(commande, jour);
-                              }}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
+                              
+                              {/* Candidate name if assigned */}
+                              {jour.candidat && (
+                                <div className="text-sm mt-2 font-medium line-clamp-2">
+                                  {jour.candidat}
+                                </div>
+                              )}
+                              
+                              {/* Edit button */}
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="absolute top-0 right-0 h-6 w-6 p-0 bg-white shadow-sm"
+                                title="Planifier un candidat"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMissionEdit(commande, jour);
+                                }}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
                         )}
                       </td>

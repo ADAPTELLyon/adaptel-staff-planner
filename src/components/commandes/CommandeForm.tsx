@@ -1,493 +1,374 @@
 
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Info } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useToast } from "@/components/ui/use-toast";
+import { Check, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-
-import { getCurrentWeekNumber, getCurrentYear, generateWeekDates, formatDateToISOString, generateWeekOptions } from "@/utils/dateUtils";
+import { toast } from "sonner";
+import { v4 as uuidv4 } from "uuid";
 import { SECTEURS } from "@/services/commandesService";
+import { generateWeekOptions, getCurrentWeekNumber } from "@/utils/dateUtils";
 
+// Define the CommandeForm component props
 interface CommandeFormProps {
   onClose: () => void;
 }
 
-interface CommandeFormData {
+interface Client {
+  id: string;
+  nom: string;
   secteur: string;
-  client_id: string;
-  client_nom: string;
-  semaine: number;
-  annee: number;
-  motif: string;
-  raison_remplacement?: string;
-  personne_remplacee?: string;
-  raison_accroissement?: string;
-  commentaire?: string;
-  jours: {
-    jour_semaine: number;
-    jour_date: string;
-    statut: string;
-    creneaux: string[];
-    couleur_fond: string;
-    couleur_texte: string;
-    personnes: number;
-  }[];
+}
+
+interface JourInfo {
+  actif: boolean;
+  jour_semaine: number;
+  creneaux: {
+    matin: boolean;
+    soir: boolean;
+    nuit: boolean; // Only for Reception
+    matin_debut: string;
+    matin_fin: string;
+    soir_debut: string;
+    soir_fin: string;
+    nuit_debut: string;
+    nuit_fin: string;
+    matin_personnes: number;
+    soir_personnes: number;
+    nuit_personnes: number;
+  };
 }
 
 const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
-  const [formData, setFormData] = useState<CommandeFormData>({
-    secteur: "",
-    client_id: "",
-    client_nom: "",
-    semaine: getCurrentWeekNumber(),
-    annee: getCurrentYear(),
-    motif: "Extra usage constant",
-    commentaire: "",
-    jours: [],
-  });
+  // Form state
+  const [secteur, setSecteur] = useState<string>("");
+  const [clientId, setClientId] = useState<string>("");
+  const [semaine, setSemaine] = useState<string>(getCurrentWeekNumber().toString());
+  const [motif, setMotif] = useState<string>("");
+  const [personneRemplacee, setPersonneRemplacee] = useState<string>("");
+  const [raisonRemplacement, setRaisonRemplacement] = useState<string>("");
+  const [raisonAccroissement, setRaisonAccroissement] = useState<string>("");
+  const [commentaire, setCommentaire] = useState<string>("");
   
-  const [clients, setClients] = useState<{ id: string; nom: string; secteur: string }[]>([]);
-  const [filteredClients, setFilteredClients] = useState<{ id: string; nom: string }[]>([]);
-  const [weekDates, setWeekDates] = useState<any[]>([]);
+  // Clients list filtered by selected sector
+  const [clients, setClients] = useState<Client[]>([]);
+  
+  // Week options
   const [weekOptions, setWeekOptions] = useState<{ value: string; label: string }[]>([]);
-  const [activatedDays, setActivatedDays] = useState<{[key: number]: boolean}>({});
-  const [dayCreneaux, setDayCreneaux] = useState<{
-    [day: number]: {
-      matin: boolean;
-      soir: boolean;
-      nuit: boolean;
-      matinHeures: { debut: string; fin: string; personnes: number };
-      soirHeures: { debut: string; fin: string; personnes: number };
-      nuitHeures: { debut: string; fin: string; personnes: number };
-    }
-  }>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const { toast } = useToast();
-
-  // Initialize week dates
-  useEffect(() => {
-    const dates = generateWeekDates(formData.semaine, formData.annee);
-    setWeekDates(dates);
-    
-    // Initialize week options
-    const options = generateWeekOptions(formData.annee);
-    setWeekOptions(options);
-    
-    // Initialize day creneaux structure
-    const initialDayCreneaux: {[key: number]: any} = {};
-    dates.forEach(date => {
-      initialDayCreneaux[date.jour] = {
+  
+  // Jours - init one object for each day of the week
+  const [jours, setJours] = useState<JourInfo[]>([
+    ...Array(7).fill(null).map((_, idx) => ({
+      actif: false,
+      jour_semaine: idx + 1, // 1 = Monday, 7 = Sunday
+      creneaux: {
         matin: false,
         soir: false,
         nuit: false,
-        matinHeures: { debut: "08:00", fin: "14:00", personnes: 1 },
-        soirHeures: { debut: "18:00", fin: "23:00", personnes: 1 },
-        nuitHeures: { debut: "22:00", fin: "06:00", personnes: 1 },
-      };
-    });
-    setDayCreneaux(initialDayCreneaux);
-  }, [formData.semaine, formData.annee]);
-
-  // Fetch clients
+        matin_debut: "09:00",
+        matin_fin: "15:00",
+        soir_debut: "18:00",
+        soir_fin: "23:00",
+        nuit_debut: "23:00",
+        nuit_fin: "07:00",
+        matin_personnes: 1,
+        soir_personnes: 1,
+        nuit_personnes: 1,
+      }
+    }))
+  ]);
+  
+  // Fetch clients filtered by sector
   useEffect(() => {
     const fetchClients = async () => {
+      if (!secteur) return;
+      
       try {
         const { data, error } = await supabase
-          .from("clients")
-          .select("id, nom, secteur");
-
+          .from('clients')
+          .select('id, nom, secteur')
+          .eq('secteur', secteur);
+        
         if (error) throw error;
+        
         setClients(data || []);
+        if (data && data.length > 0) {
+          setClientId(data[0].id);
+        } else {
+          setClientId("");
+        }
       } catch (error) {
-        console.error("Error fetching clients:", error);
-        toast({
-          title: "Erreur!",
-          description: "Impossible de charger la liste des clients.",
-        });
+        console.error('Error fetching clients:', error);
+        toast.error("Erreur lors du chargement des clients");
       }
     };
-
+    
     fetchClients();
-  }, []);
-
-  // Filter clients when sector changes
+  }, [secteur]);
+  
+  // Load week options
   useEffect(() => {
-    if (formData.secteur) {
-      const filtered = clients.filter(client => client.secteur === formData.secteur);
-      setFilteredClients(filtered);
-      
-      // Reset client selection if current selection doesn't match the sector
-      if (formData.client_id) {
-        const clientExists = filtered.some(client => client.id === formData.client_id);
-        if (!clientExists) {
-          setFormData(prev => ({
-            ...prev,
-            client_id: "",
-            client_nom: ""
-          }));
+    const currentYear = new Date().getFullYear();
+    const options = generateWeekOptions(currentYear);
+    setWeekOptions(options);
+  }, []);
+  
+  // Toggle all days active/inactive
+  const toggleAllDays = (active: boolean) => {
+    setJours(jours.map(jour => ({
+      ...jour,
+      actif: active
+    })));
+  };
+  
+  // Toggle a specific day
+  const toggleDay = (dayIndex: number) => {
+    setJours(jours.map((jour, idx) => 
+      idx === dayIndex ? { ...jour, actif: !jour.actif } : jour
+    ));
+  };
+  
+  // Toggle a specific creneau for a day
+  const toggleCreneau = (dayIndex: number, creneau: 'matin' | 'soir' | 'nuit') => {
+    setJours(jours.map((jour, idx) => 
+      idx === dayIndex ? {
+        ...jour,
+        creneaux: {
+          ...jour.creneaux,
+          [creneau]: !jour.creneaux[creneau]
         }
-      }
-    } else {
-      setFilteredClients([]);
-    }
-  }, [formData.secteur, clients]);
-
-  // Handle sector selection
-  const handleSectorChange = (sector: string) => {
-    setFormData({
-      ...formData,
-      secteur: sector,
-      client_id: "",
-      client_nom: ""
-    });
+      } : jour
+    ));
   };
-
-  // Handle client selection
-  const handleClientChange = (clientId: string) => {
-    const selectedClient = clients.find(c => c.id === clientId);
-    setFormData({
-      ...formData,
-      client_id: clientId,
-      client_nom: selectedClient ? selectedClient.nom : ""
-    });
-  };
-
-  // Handle week selection
-  const handleWeekChange = (weekNum: string) => {
-    setFormData({
-      ...formData,
-      semaine: parseInt(weekNum)
-    });
-  };
-
-  // Toggle day activation
-  const toggleDay = (dayNumber: number) => {
-    setActivatedDays(prev => ({
-      ...prev,
-      [dayNumber]: !prev[dayNumber]
-    }));
-  };
-
-  // Toggle specific creneau for a day
-  const toggleCreneau = (dayNumber: number, creneauType: 'matin' | 'soir' | 'nuit') => {
-    setDayCreneaux(prev => ({
-      ...prev,
-      [dayNumber]: {
-        ...prev[dayNumber],
-        [creneauType]: !prev[dayNumber][creneauType]
-      }
-    }));
-  };
-
-  // Update hours for a creneau
-  const updateCreneauHours = (
-    dayNumber: number, 
-    creneauType: 'matinHeures' | 'soirHeures' | 'nuitHeures',
+  
+  // Update creneau time or persons
+  const updateCreneau = (
+    dayIndex: number, 
+    creneau: 'matin' | 'soir' | 'nuit',
     field: 'debut' | 'fin' | 'personnes',
     value: string | number
   ) => {
-    setDayCreneaux(prev => ({
-      ...prev,
-      [dayNumber]: {
-        ...prev[dayNumber],
-        [creneauType]: {
-          ...prev[dayNumber][creneauType],
-          [field]: value
+    setJours(jours.map((jour, idx) => 
+      idx === dayIndex ? {
+        ...jour,
+        creneaux: {
+          ...jour.creneaux,
+          [`${creneau}_${field}`]: value
         }
-      }
-    }));
+      } : jour
+    ));
   };
-
-  // Activate all days
-  const activateAllDays = () => {
-    const newActivatedDays: {[key: number]: boolean} = {};
-    weekDates.forEach(date => {
-      newActivatedDays[date.jour] = true;
-    });
-    setActivatedDays(newActivatedDays);
-  };
-
-  // Deactivate all days
-  const deactivateAllDays = () => {
-    setActivatedDays({});
-  };
-
-  // Replicate hours to all activated days
-  const replicateHours = () => {
-    // Find the first activated day to use as template
-    const firstActivatedDayNumber = Object.keys(activatedDays)
-      .find(key => activatedDays[parseInt(key)]) || "1";
-    
-    const firstDay = parseInt(firstActivatedDayNumber);
-    const template = dayCreneaux[firstDay];
-    
-    if (!template) return;
-    
-    const newDayCreneaux = {...dayCreneaux};
-    
-    Object.keys(activatedDays).forEach(key => {
-      const day = parseInt(key);
-      if (activatedDays[day] && day !== firstDay) {
-        newDayCreneaux[day] = {...template};
-      }
-    });
-    
-    setDayCreneaux(newDayCreneaux);
-  };
-
-  // Prepare commande data for submission
-  const prepareCommandeData = () => {
-    const joursData = [];
-    
-    // For each activated day
-    for (const [dayNumberStr, isActive] of Object.entries(activatedDays)) {
-      if (!isActive) continue;
-      
-      const dayNumber = parseInt(dayNumberStr);
-      const day = weekDates.find(d => d.jour === dayNumber);
-      
-      if (!day) continue;
-      
-      const dayCreneau = dayCreneaux[dayNumber];
-      const creneauxList = [];
-      
-      // Add active creneaux
-      if (dayCreneau.matin) {
-        creneauxList.push(`${dayCreneau.matinHeures.debut}-${dayCreneau.matinHeures.fin}`);
-      }
-      
-      if (dayCreneau.soir) {
-        creneauxList.push(`${dayCreneau.soirHeures.debut}-${dayCreneau.soirHeures.fin}`);
-      }
-      
-      if (dayCreneau.nuit) {
-        creneauxList.push(`${dayCreneau.nuitHeures.debut}-${dayCreneau.nuitHeures.fin}`);
-      }
-      
-      // If no creneaux are selected, skip this day
-      if (creneauxList.length === 0) continue;
-      
-      joursData.push({
-        jour_semaine: dayNumber,
-        jour_date: formatDateToISOString(day.date),
-        statut: "En recherche",
-        creneaux: creneauxList,
-        couleur_fond: "#ffe599",
-        couleur_texte: "#000000",
-        personnes: Math.max(
-          dayCreneau.matin ? dayCreneau.matinHeures.personnes : 0,
-          dayCreneau.soir ? dayCreneau.soirHeures.personnes : 0,
-          dayCreneau.nuit ? dayCreneau.nuitHeures.personnes : 0
-        )
-      });
-    }
-    
-    return {
-      ...formData,
-      jours: joursData,
-      statut: "En recherche"
-    };
-  };
-
-  // Handle form submission
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Form validation
-    if (!formData.secteur) {
-      toast({
-        title: "Erreur!",
-        description: "Veuillez sélectionner un secteur.",
-        variant: "destructive"
-      });
+  
+  // Replicate the first active day's creneaux to all other active days
+  const replicateCreneaux = () => {
+    // Find the first active day
+    const firstActiveDay = jours.find(jour => jour.actif);
+    if (!firstActiveDay) {
+      toast.error("Aucun jour n'est activé");
       return;
     }
     
-    if (!formData.client_id) {
-      toast({
-        title: "Erreur!",
-        description: "Veuillez sélectionner un client.",
-        variant: "destructive"
-      });
+    // Apply its creneaux to all other active days
+    setJours(jours.map(jour => 
+      jour.actif ? {
+        ...jour,
+        creneaux: { ...firstActiveDay.creneaux }
+      } : jour
+    ));
+    
+    toast.success("Horaires répliqués sur tous les jours actifs");
+  };
+  
+  // Submit the form
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    
+    // Validation
+    if (!secteur) {
+      toast.error("Veuillez sélectionner un secteur");
       return;
     }
     
-    if (!formData.motif) {
-      toast({
-        title: "Erreur!",
-        description: "Veuillez sélectionner un motif.",
-        variant: "destructive"
-      });
+    if (!clientId) {
+      toast.error("Veuillez sélectionner un client");
       return;
     }
     
-    // Check if any days are activated
-    if (Object.values(activatedDays).filter(Boolean).length === 0) {
-      toast({
-        title: "Erreur!",
-        description: "Veuillez activer au moins une journée.",
-        variant: "destructive"
-      });
+    if (!semaine) {
+      toast.error("Veuillez sélectionner une semaine");
       return;
     }
     
-    // Check if activated days have at least one creneau
-    let hasCreneaux = false;
-    for (const [dayNumberStr, isActive] of Object.entries(activatedDays)) {
-      if (!isActive) continue;
-      
-      const dayNumber = parseInt(dayNumberStr);
-      const dayCreneau = dayCreneaux[dayNumber];
-      
-      if (dayCreneau.matin || dayCreneau.soir || dayCreneau.nuit) {
-        hasCreneaux = true;
-        break;
-      }
-    }
-    
-    if (!hasCreneaux) {
-      toast({
-        title: "Erreur!",
-        description: "Veuillez sélectionner au moins un créneau pour les journées activées.",
-        variant: "destructive"
-      });
+    if (!motif) {
+      toast.error("Veuillez sélectionner un motif");
       return;
     }
     
-    // Start submission
-    setIsSubmitting(true);
-    const commandeData = prepareCommandeData();
+    // Check if any day is active
+    const anyDayActive = jours.some(jour => jour.actif);
+    if (!anyDayActive) {
+      toast.error("Veuillez activer au moins un jour");
+      return;
+    }
+    
+    // Check if any active day has at least one creneau
+    const anyCreneauActive = jours.some(jour => 
+      jour.actif && (jour.creneaux.matin || jour.creneaux.soir || jour.creneaux.nuit)
+    );
+    if (!anyCreneauActive) {
+      toast.error("Veuillez sélectionner au moins un créneau pour les jours actifs");
+      return;
+    }
     
     try {
-      // Create commande
-      const { data: commande, error: commandeError } = await supabase
-        .from("commandes")
-        .insert([{
-          client_nom: commandeData.client_nom,
-          client_id: commandeData.client_id,
-          secteur: commandeData.secteur,
-          statut: commandeData.statut,
-          semaine: commandeData.semaine,
-          annee: commandeData.annee
-        }])
-        .select();
+      // Generate a unique ID for the commande
+      const commandeId = uuidv4();
+      
+      // Create the base commande
+      const { error: commandeError } = await supabase
+        .from('commandes')
+        .insert({
+          id: commandeId,
+          client_id: clientId,
+          semaine: parseInt(semaine),
+          secteur: secteur,
+          motif: motif,
+          personne_remplacee: motif === "Remplacement d'une personne absente" ? personneRemplacee : null,
+          raison_remplacement: motif === "Remplacement d'une personne absente" ? raisonRemplacement : null,
+          raison_accroissement: motif === "Accroissement d'activité" ? raisonAccroissement : null,
+          commentaire: commentaire || null
+        });
       
       if (commandeError) throw commandeError;
-      if (!commande || commande.length === 0) throw new Error("Échec de la création de la commande");
       
-      // Create commande_jours for each jour
-      const commandeId = commande[0].id;
-      const jourPromises = commandeData.jours.map(async (jour) => {
-        const { error: jourError } = await supabase
-          .from("commande_jours")
-          .insert([{
+      // Create the commande_jours entries for each active day
+      for (const jour of jours) {
+        if (!jour.actif) continue;
+        
+        const { creneaux } = jour;
+        
+        // For each active creneau, create a commande_jour entry
+        const creatingCreneaux = [];
+        
+        if (creneaux.matin) {
+          creatingCreneaux.push({
             commande_id: commandeId,
             jour_semaine: jour.jour_semaine,
-            jour_date: jour.jour_date,
-            statut: jour.statut,
-            creneaux: jour.creneaux,
-            couleur_fond: jour.couleur_fond,
-            couleur_texte: jour.couleur_texte
-          }]);
+            creneau_type: 'Matin',
+            heure_debut: creneaux.matin_debut,
+            heure_fin: creneaux.matin_fin,
+            nb_personnes: creneaux.matin_personnes,
+            statut: 'En recherche'
+          });
+        }
+        
+        if (creneaux.soir) {
+          creatingCreneaux.push({
+            commande_id: commandeId,
+            jour_semaine: jour.jour_semaine,
+            creneau_type: 'Soir',
+            heure_debut: creneaux.soir_debut,
+            heure_fin: creneaux.soir_fin,
+            nb_personnes: creneaux.soir_personnes,
+            statut: 'En recherche'
+          });
+        }
+        
+        if (creneaux.nuit && secteur === 'Réception') {
+          creatingCreneaux.push({
+            commande_id: commandeId,
+            jour_semaine: jour.jour_semaine,
+            creneau_type: 'Nuit',
+            heure_debut: creneaux.nuit_debut,
+            heure_fin: creneaux.nuit_fin,
+            nb_personnes: creneaux.nuit_personnes,
+            statut: 'En recherche'
+          });
+        }
+        
+        // Insert all creneaux for this day
+        if (creatingCreneaux.length > 0) {
+          const { error: joursError } = await supabase
+            .from('commande_jours')
+            .insert(creatingCreneaux);
           
-        if (jourError) throw jourError;
-      });
+          if (joursError) throw joursError;
+        }
+      }
       
-      await Promise.all(jourPromises);
-      
-      toast({
-        title: "Succès!",
-        description: "Commande créée avec succès."
-      });
-      
-      // Close the dialog and refresh the page
+      toast.success("Commande créée avec succès");
       onClose();
-    } catch (error: any) {
-      console.error("Error creating commande:", error);
-      toast({
-        title: "Erreur!",
-        description: error.message || "Une erreur est survenue lors de la création de la commande.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSubmitting(false);
+    } catch (error) {
+      console.error('Error creating commande:', error);
+      toast.error("Erreur lors de la création de la commande");
     }
   };
-
-  // Check if nuit creneau is available (only for Reception)
-  const isNuitAvailable = formData.secteur === "Réception";
   
-  // Check if only matin is available (for Etages)
-  const onlyMatinAvailable = formData.secteur === "Étages";
-
+  // Get day name for display
+  const getDayName = (dayIndex: number) => {
+    const days = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+    return days[dayIndex];
+  };
+  
   return (
-    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[80vh] overflow-y-auto">
-      {/* Left Column - General Information */}
-      <div className="space-y-4 p-2">
-        <h3 className="text-lg font-medium">Informations générales</h3>
+    <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[70vh] overflow-y-auto">
+      {/* Left side - General information */}
+      <div className="space-y-4 p-4 border rounded-md">
+        <h3 className="text-lg font-semibold mb-4">Informations générales</h3>
         
         {/* Secteur */}
-        <div>
-          <Label htmlFor="secteur" className="text-sm font-medium">
-            Secteur <span className="text-red-500">*</span>
-          </Label>
-          <Select
-            value={formData.secteur}
-            onValueChange={handleSectorChange}
+        <div className="space-y-2">
+          <Label htmlFor="secteur">Secteur <span className="text-red-500">*</span></Label>
+          <Select 
+            value={secteur} 
+            onValueChange={setSecteur}
           >
-            <SelectTrigger id="secteur" className="w-full">
+            <SelectTrigger id="secteur">
               <SelectValue placeholder="Sélectionner un secteur" />
             </SelectTrigger>
             <SelectContent>
-              {SECTEURS.map((secteur) => (
-                <SelectItem key={secteur} value={secteur}>{secteur}</SelectItem>
+              {SECTEURS.map((s) => (
+                <SelectItem key={s} value={s}>{s}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         
         {/* Client */}
-        <div>
-          <Label htmlFor="client" className="text-sm font-medium">
-            Client <span className="text-red-500">*</span>
-          </Label>
-          <Select
-            value={formData.client_id}
-            onValueChange={handleClientChange}
-            disabled={!formData.secteur}
+        <div className="space-y-2">
+          <Label htmlFor="client">Client <span className="text-red-500">*</span></Label>
+          <Select 
+            value={clientId} 
+            onValueChange={setClientId}
+            disabled={!secteur || clients.length === 0}
           >
-            <SelectTrigger id="client" className="w-full">
-              <SelectValue placeholder={formData.secteur ? "Sélectionner un client" : "Veuillez d'abord choisir un secteur"} />
+            <SelectTrigger id="client">
+              <SelectValue placeholder={
+                !secteur ? "Sélectionnez d'abord un secteur" : 
+                clients.length === 0 ? "Aucun client disponible" : 
+                "Sélectionner un client"
+              } />
             </SelectTrigger>
             <SelectContent>
-              {filteredClients.length > 0 ? (
-                filteredClients.map((client) => (
-                  <SelectItem key={client.id} value={client.id}>{client.nom}</SelectItem>
-                ))
-              ) : (
-                <SelectItem value="no-clients" disabled>Aucun client disponible pour ce secteur</SelectItem>
-              )}
+              {clients.map((client) => (
+                <SelectItem key={client.id} value={client.id}>{client.nom}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
         
         {/* Semaine */}
-        <div>
-          <Label htmlFor="semaine" className="text-sm font-medium">
-            Semaine <span className="text-red-500">*</span>
-          </Label>
-          <Select
-            value={formData.semaine.toString()}
-            onValueChange={handleWeekChange}
+        <div className="space-y-2">
+          <Label htmlFor="semaine">Semaine <span className="text-red-500">*</span></Label>
+          <Select 
+            value={semaine} 
+            onValueChange={setSemaine}
           >
-            <SelectTrigger id="semaine" className="w-full">
+            <SelectTrigger id="semaine">
               <SelectValue placeholder="Sélectionner une semaine" />
             </SelectTrigger>
             <SelectContent>
@@ -499,259 +380,223 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
         </div>
         
         {/* Motif */}
-        <div>
-          <Label className="text-sm font-medium">
-            Motif <span className="text-red-500">*</span>
-          </Label>
-          <RadioGroup 
-            value={formData.motif}
-            onValueChange={(value) => setFormData({...formData, motif: value})}
-            className="space-y-2 mt-2"
+        <div className="space-y-2">
+          <Label htmlFor="motif">Motif <span className="text-red-500">*</span></Label>
+          <Select 
+            value={motif} 
+            onValueChange={setMotif}
           >
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="Extra usage constant" id="motif-extra" />
-              <Label htmlFor="motif-extra">Extra usage constant</Label>
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="Remplacement d'une personne absente" id="motif-remplacement" />
-                <Label htmlFor="motif-remplacement">Remplacement d'une personne absente</Label>
-              </div>
-              
-              {formData.motif === "Remplacement d'une personne absente" && (
-                <div className="pl-6 space-y-2">
-                  <div>
-                    <Label htmlFor="personne-remplacee" className="text-sm">Nom & prénom de la personne à remplacer</Label>
-                    <Input
-                      id="personne-remplacee"
-                      value={formData.personne_remplacee || ""}
-                      onChange={(e) => setFormData({...formData, personne_remplacee: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="raison-remplacement" className="text-sm">Raison du remplacement</Label>
-                    <Textarea
-                      id="raison-remplacement"
-                      value={formData.raison_remplacement || ""}
-                      onChange={(e) => setFormData({...formData, raison_remplacement: e.target.value})}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="Accroissement d'activité" id="motif-accroissement" />
-                <Label htmlFor="motif-accroissement">Accroissement d'activité</Label>
-              </div>
-              
-              {formData.motif === "Accroissement d'activité" && (
-                <div className="pl-6">
-                  <Label htmlFor="raison-accroissement" className="text-sm">Raison de l'accroissement</Label>
-                  <Textarea
-                    id="raison-accroissement"
-                    value={formData.raison_accroissement || ""}
-                    onChange={(e) => setFormData({...formData, raison_accroissement: e.target.value})}
-                  />
-                </div>
-              )}
-            </div>
-          </RadioGroup>
+            <SelectTrigger id="motif">
+              <SelectValue placeholder="Sélectionner un motif" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Extra usage constant">Extra usage constant</SelectItem>
+              <SelectItem value="Remplacement d'une personne absente">Remplacement d'une personne absente</SelectItem>
+              <SelectItem value="Accroissement d'activité">Accroissement d'activité</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         
+        {/* Conditional fields based on motif */}
+        {motif === "Remplacement d'une personne absente" && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="personne-remplacee">Nom & prénom de la personne à remplacer</Label>
+              <Input
+                id="personne-remplacee"
+                value={personneRemplacee}
+                onChange={(e) => setPersonneRemplacee(e.target.value)}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="raison-remplacement">Raison du remplacement</Label>
+              <Textarea
+                id="raison-remplacement"
+                value={raisonRemplacement}
+                onChange={(e) => setRaisonRemplacement(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </>
+        )}
+        
+        {motif === "Accroissement d'activité" && (
+          <div className="space-y-2">
+            <Label htmlFor="raison-accroissement">Raison de l'accroissement</Label>
+            <Textarea
+              id="raison-accroissement"
+              value={raisonAccroissement}
+              onChange={(e) => setRaisonAccroissement(e.target.value)}
+              rows={3}
+            />
+          </div>
+        )}
+        
         {/* Commentaire */}
-        <div>
-          <Label htmlFor="commentaire" className="text-sm font-medium flex items-center gap-1">
-            Commentaire <Info className="h-4 w-4" title="Si rempli, une icône info sera affichée dans la ligne du planning" />
-          </Label>
+        <div className="space-y-2">
+          <div className="flex items-center">
+            <Label htmlFor="commentaire" className="mr-2">Commentaire</Label>
+            <Info size={16} className="text-gray-500" aria-label="Si rempli, une icône info apparaîtra sur la ligne de planning" />
+          </div>
           <Textarea
             id="commentaire"
-            value={formData.commentaire || ""}
-            onChange={(e) => setFormData({...formData, commentaire: e.target.value})}
-            placeholder="Informations complémentaires..."
+            value={commentaire}
+            onChange={(e) => setCommentaire(e.target.value)}
+            placeholder="Informations supplémentaires (optionnel)"
+            rows={3}
           />
         </div>
       </div>
       
-      {/* Right Column - Days Management */}
-      <div className="space-y-4 p-2 border-t md:border-t-0 md:border-l border-gray-200 pt-4 md:pt-0 md:pl-6">
-        <h3 className="text-lg font-medium">Journées</h3>
+      {/* Right side - Day management */}
+      <div className="space-y-4 p-4 border rounded-md">
+        <h3 className="text-lg font-semibold mb-4">Jours et créneaux</h3>
         
-        {/* Days of the week */}
+        {/* Days grid */}
         <div className="space-y-4">
-          {weekDates.map((day) => (
-            <div key={day.jour} className="border rounded-md p-3">
-              <div className="flex justify-between items-center mb-2">
-                <div className="font-medium">
-                  {day.jourNom} {day.numero} {day.mois}
-                </div>
-                <div className="flex items-center">
-                  <Switch
-                    checked={!!activatedDays[day.jour]}
-                    onCheckedChange={() => toggleDay(day.jour)}
-                  />
-                  <Label className="ml-2 text-sm">
-                    {activatedDays[day.jour] ? "Activé" : "Désactivé"}
-                  </Label>
-                </div>
+          {jours.map((jour, idx) => (
+            <div key={idx} className="border rounded-md p-3">
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-medium">{getDayName(idx)}</div>
+                <Switch 
+                  checked={jour.actif}
+                  onCheckedChange={() => toggleDay(idx)}
+                />
               </div>
               
-              {activatedDays[day.jour] && (
-                <div className="space-y-3 pl-2 pt-1">
-                  {/* Créneau options */}
-                  <div className="flex flex-wrap gap-2">
-                    <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        id={`matin-${day.jour}`}
-                        className="mr-1"
-                        checked={dayCreneaux[day.jour]?.matin || false}
-                        onChange={() => toggleCreneau(day.jour, 'matin')}
+              {jour.actif && (
+                <div className="pl-4 space-y-3">
+                  {/* Matin/Midi (available for all sectors) */}
+                  <div className="flex flex-col">
+                    <div className="flex items-center mb-2">
+                      <Switch 
+                        id={`matin-${idx}`}
+                        checked={jour.creneaux.matin}
+                        onCheckedChange={() => toggleCreneau(idx, 'matin')}
+                        className="mr-2"
                       />
-                      <Label htmlFor={`matin-${day.jour}`} className="text-sm">
-                        Matin/Midi
-                      </Label>
+                      <Label htmlFor={`matin-${idx}`}>Matin/Midi</Label>
                     </div>
                     
-                    {!onlyMatinAvailable && (
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id={`soir-${day.jour}`}
-                          className="mr-1"
-                          checked={dayCreneaux[day.jour]?.soir || false}
-                          onChange={() => toggleCreneau(day.jour, 'soir')}
-                        />
-                        <Label htmlFor={`soir-${day.jour}`} className="text-sm">
-                          Soir
-                        </Label>
-                      </div>
-                    )}
-                    
-                    {isNuitAvailable && (
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id={`nuit-${day.jour}`}
-                          className="mr-1"
-                          checked={dayCreneaux[day.jour]?.nuit || false}
-                          onChange={() => toggleCreneau(day.jour, 'nuit')}
-                        />
-                        <Label htmlFor={`nuit-${day.jour}`} className="text-sm">
-                          Nuit
-                        </Label>
+                    {jour.creneaux.matin && (
+                      <div className="pl-8 grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs">Début</Label>
+                          <Input 
+                            type="time" 
+                            value={jour.creneaux.matin_debut}
+                            onChange={(e) => updateCreneau(idx, 'matin', 'debut', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Fin</Label>
+                          <Input 
+                            type="time" 
+                            value={jour.creneaux.matin_fin}
+                            onChange={(e) => updateCreneau(idx, 'matin', 'fin', e.target.value)}
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Label className="text-xs">Personnes</Label>
+                          <Input 
+                            type="number" 
+                            min={1}
+                            value={jour.creneaux.matin_personnes}
+                            onChange={(e) => updateCreneau(idx, 'matin', 'personnes', parseInt(e.target.value) || 1)}
+                          />
+                        </div>
                       </div>
                     )}
                   </div>
                   
-                  {/* Créneau details */}
-                  {dayCreneaux[day.jour]?.matin && (
-                    <div className="grid grid-cols-3 gap-2 pl-4 border-l-2 border-green-200 p-2">
-                      <div>
-                        <Label htmlFor={`matin-debut-${day.jour}`} className="text-xs">Début</Label>
-                        <Input
-                          type="time"
-                          id={`matin-debut-${day.jour}`}
-                          value={dayCreneaux[day.jour].matinHeures.debut}
-                          onChange={(e) => updateCreneauHours(day.jour, 'matinHeures', 'debut', e.target.value)}
-                          className="text-sm p-1 h-8"
+                  {/* Soir (available for all sectors except Étages) */}
+                  {secteur !== "Étages" && (
+                    <div className="flex flex-col">
+                      <div className="flex items-center mb-2">
+                        <Switch 
+                          id={`soir-${idx}`}
+                          checked={jour.creneaux.soir}
+                          onCheckedChange={() => toggleCreneau(idx, 'soir')}
+                          className="mr-2"
                         />
+                        <Label htmlFor={`soir-${idx}`}>Soir</Label>
                       </div>
-                      <div>
-                        <Label htmlFor={`matin-fin-${day.jour}`} className="text-xs">Fin</Label>
-                        <Input
-                          type="time"
-                          id={`matin-fin-${day.jour}`}
-                          value={dayCreneaux[day.jour].matinHeures.fin}
-                          onChange={(e) => updateCreneauHours(day.jour, 'matinHeures', 'fin', e.target.value)}
-                          className="text-sm p-1 h-8"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor={`matin-personnes-${day.jour}`} className="text-xs">Personnes</Label>
-                        <Input
-                          type="number"
-                          id={`matin-personnes-${day.jour}`}
-                          min="1"
-                          value={dayCreneaux[day.jour].matinHeures.personnes}
-                          onChange={(e) => updateCreneauHours(day.jour, 'matinHeures', 'personnes', parseInt(e.target.value))}
-                          className="text-sm p-1 h-8"
-                        />
-                      </div>
+                      
+                      {jour.creneaux.soir && (
+                        <div className="pl-8 grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs">Début</Label>
+                            <Input 
+                              type="time" 
+                              value={jour.creneaux.soir_debut}
+                              onChange={(e) => updateCreneau(idx, 'soir', 'debut', e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Fin</Label>
+                            <Input 
+                              type="time" 
+                              value={jour.creneaux.soir_fin}
+                              onChange={(e) => updateCreneau(idx, 'soir', 'fin', e.target.value)}
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Label className="text-xs">Personnes</Label>
+                            <Input 
+                              type="number" 
+                              min={1}
+                              value={jour.creneaux.soir_personnes}
+                              onChange={(e) => updateCreneau(idx, 'soir', 'personnes', parseInt(e.target.value) || 1)}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                   
-                  {dayCreneaux[day.jour]?.soir && !onlyMatinAvailable && (
-                    <div className="grid grid-cols-3 gap-2 pl-4 border-l-2 border-blue-200 p-2">
-                      <div>
-                        <Label htmlFor={`soir-debut-${day.jour}`} className="text-xs">Début</Label>
-                        <Input
-                          type="time"
-                          id={`soir-debut-${day.jour}`}
-                          value={dayCreneaux[day.jour].soirHeures.debut}
-                          onChange={(e) => updateCreneauHours(day.jour, 'soirHeures', 'debut', e.target.value)}
-                          className="text-sm p-1 h-8"
+                  {/* Nuit (only available for Reception) */}
+                  {secteur === "Réception" && (
+                    <div className="flex flex-col">
+                      <div className="flex items-center mb-2">
+                        <Switch 
+                          id={`nuit-${idx}`}
+                          checked={jour.creneaux.nuit}
+                          onCheckedChange={() => toggleCreneau(idx, 'nuit')}
+                          className="mr-2"
                         />
+                        <Label htmlFor={`nuit-${idx}`}>Nuit</Label>
                       </div>
-                      <div>
-                        <Label htmlFor={`soir-fin-${day.jour}`} className="text-xs">Fin</Label>
-                        <Input
-                          type="time"
-                          id={`soir-fin-${day.jour}`}
-                          value={dayCreneaux[day.jour].soirHeures.fin}
-                          onChange={(e) => updateCreneauHours(day.jour, 'soirHeures', 'fin', e.target.value)}
-                          className="text-sm p-1 h-8"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor={`soir-personnes-${day.jour}`} className="text-xs">Personnes</Label>
-                        <Input
-                          type="number"
-                          id={`soir-personnes-${day.jour}`}
-                          min="1"
-                          value={dayCreneaux[day.jour].soirHeures.personnes}
-                          onChange={(e) => updateCreneauHours(day.jour, 'soirHeures', 'personnes', parseInt(e.target.value))}
-                          className="text-sm p-1 h-8"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  
-                  {dayCreneaux[day.jour]?.nuit && isNuitAvailable && (
-                    <div className="grid grid-cols-3 gap-2 pl-4 border-l-2 border-purple-200 p-2">
-                      <div>
-                        <Label htmlFor={`nuit-debut-${day.jour}`} className="text-xs">Début</Label>
-                        <Input
-                          type="time"
-                          id={`nuit-debut-${day.jour}`}
-                          value={dayCreneaux[day.jour].nuitHeures.debut}
-                          onChange={(e) => updateCreneauHours(day.jour, 'nuitHeures', 'debut', e.target.value)}
-                          className="text-sm p-1 h-8"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor={`nuit-fin-${day.jour}`} className="text-xs">Fin</Label>
-                        <Input
-                          type="time"
-                          id={`nuit-fin-${day.jour}`}
-                          value={dayCreneaux[day.jour].nuitHeures.fin}
-                          onChange={(e) => updateCreneauHours(day.jour, 'nuitHeures', 'fin', e.target.value)}
-                          className="text-sm p-1 h-8"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor={`nuit-personnes-${day.jour}`} className="text-xs">Personnes</Label>
-                        <Input
-                          type="number"
-                          id={`nuit-personnes-${day.jour}`}
-                          min="1"
-                          value={dayCreneaux[day.jour].nuitHeures.personnes}
-                          onChange={(e) => updateCreneauHours(day.jour, 'nuitHeures', 'personnes', parseInt(e.target.value))}
-                          className="text-sm p-1 h-8"
-                        />
-                      </div>
+                      
+                      {jour.creneaux.nuit && (
+                        <div className="pl-8 grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs">Début</Label>
+                            <Input 
+                              type="time" 
+                              value={jour.creneaux.nuit_debut}
+                              onChange={(e) => updateCreneau(idx, 'nuit', 'debut', e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Fin</Label>
+                            <Input 
+                              type="time" 
+                              value={jour.creneaux.nuit_fin}
+                              onChange={(e) => updateCreneau(idx, 'nuit', 'fin', e.target.value)}
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Label className="text-xs">Personnes</Label>
+                            <Input 
+                              type="number" 
+                              min={1}
+                              value={jour.creneaux.nuit_personnes}
+                              onChange={(e) => updateCreneau(idx, 'nuit', 'personnes', parseInt(e.target.value) || 1)}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -760,45 +605,40 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
           ))}
         </div>
         
-        {/* Quick buttons */}
-        <div className="flex flex-wrap gap-2 justify-between">
+        {/* Quick action buttons */}
+        <div className="flex flex-wrap gap-2 pt-4">
           <Button 
             type="button" 
             variant="outline" 
-            size="sm"
-            onClick={activateAllDays}
+            onClick={() => toggleAllDays(true)}
           >
-            Activer toutes les journées
+            Activer tous les jours
           </Button>
-          
           <Button 
             type="button" 
             variant="outline" 
-            size="sm"
-            onClick={deactivateAllDays}
+            onClick={() => toggleAllDays(false)}
           >
-            Désactiver toutes les journées
+            Désactiver tous les jours
           </Button>
-          
           <Button 
             type="button" 
             variant="outline" 
-            size="sm"
-            onClick={replicateHours}
-            disabled={Object.keys(activatedDays).filter(k => activatedDays[parseInt(k)]).length <= 1}
+            onClick={replicateCreneaux}
           >
+            <Check size={16} className="mr-1" aria-label="Appliquer" />
             Répliquer les horaires
           </Button>
         </div>
       </div>
       
-      {/* Submit Button */}
-      <div className="col-span-1 md:col-span-2 flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+      {/* Form buttons */}
+      <div className="flex justify-end gap-2 col-span-1 md:col-span-2">
+        <Button type="button" variant="outline" onClick={onClose}>
           Annuler
         </Button>
-        <Button type="submit" className="bg-[#840404] hover:bg-[#6b0303]" disabled={isSubmitting}>
-          {isSubmitting ? "Création en cours..." : "Créer la commande"}
+        <Button type="submit" className="bg-[#840404] hover:bg-[#6b0303]">
+          Créer la commande
         </Button>
       </div>
     </form>

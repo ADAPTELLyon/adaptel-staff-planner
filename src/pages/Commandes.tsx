@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,22 +41,17 @@ const Commandes = () => {
   const [client, setClient] = useState("tous");
   const [clients, setClients] = useState<{id: string, nom: string}[]>([]);
   
-  // Filters
   const [semaineEnCours, setSemaineEnCours] = useState(true);
   const [enRecherche, setEnRecherche] = useState(false);
   const [toutAfficher, setToutAfficher] = useState(true);
   
-  // Week dates
   const [weekDates, setWeekDates] = useState<any[]>([]);
   
-  // New commande form dialog
   const [newCommandeDialogOpen, setNewCommandeDialogOpen] = useState(false);
   
-  // Mission edit dialog
   const [missionEditOpen, setMissionEditOpen] = useState(false);
   const [currentMission, setCurrentMission] = useState<any>(null);
 
-  // Fetch commandes
   const fetchCommandes = async () => {
     setLoading(true);
     try {
@@ -65,19 +59,15 @@ const Commandes = () => {
       setCommandes(data);
       setFilteredCommandes(data);
       
-      // Calculate indicators
       const indicatorsData = calculateIndicators(data);
       setIndicators(indicatorsData);
       
-      // Calculate progression
       const planifiees = indicatorsData.find(i => i.nom === "Validées")?.valeur || 0;
       const total = indicatorsData.find(i => i.nom === "En recherche")?.valeur || 0;
       setProgression(total > 0 ? (planifiees / total) * 100 : 0);
       
-      // Generate week dates
       const dates = generateWeekDates(currentWeek, currentYear);
       
-      // Count "En recherche" items for each day
       data.forEach(commande => {
         commande.jours.forEach((jour: CommandeJour) => {
           if (jour.statut === "En recherche") {
@@ -98,7 +88,6 @@ const Commandes = () => {
     }
   };
 
-  // Fetch clients for filter
   const fetchClients = async () => {
     try {
       const { data, error } = await supabase
@@ -112,11 +101,9 @@ const Commandes = () => {
     }
   };
 
-  // Apply filters
   const applyFilters = () => {
     let filtered = [...commandes];
     
-    // Filter by search term
     if (recherche) {
       filtered = filtered.filter(commande => 
         commande.client_nom.toLowerCase().includes(recherche.toLowerCase()) ||
@@ -124,39 +111,32 @@ const Commandes = () => {
       );
     }
     
-    // Filter by secteur
     if (secteur !== "tous") {
       filtered = filtered.filter(commande => commande.secteur === secteur);
     }
     
-    // Filter by client
     if (client !== "tous") {
       filtered = filtered.filter(commande => commande.client_id === client);
     }
     
-    // Filter by enRecherche (only show commandes with days in "En recherche" status)
     if (enRecherche) {
       filtered = filtered.filter(commande => 
         commande.jours.some((jour: CommandeJour) => jour.statut === "En recherche")
       );
     }
     
-    // Set filtered result
     setFilteredCommandes(filtered);
   };
 
-  // Load initial data
   useEffect(() => {
     fetchCommandes();
     fetchClients();
   }, [currentWeek, currentYear]);
 
-  // Apply filters when filter values change
   useEffect(() => {
     applyFilters();
   }, [recherche, secteur, client, enRecherche, commandes]);
 
-  // Get day class based on statut
   const getDayClass = (jour: CommandeJour | undefined) => {
     if (!jour) return "bg-gray-100";
     
@@ -171,14 +151,12 @@ const Commandes = () => {
         return "bg-gray-100";
     }
   };
-  
-  // Handle mission edit
+
   const handleMissionEdit = (commande: any, jour: CommandeJour) => {
     setCurrentMission({ commande, jour });
     setMissionEditOpen(true);
   };
 
-  // Handle mission status update
   const handleUpdateMission = async (data: any) => {
     try {
       const { error } = await supabase
@@ -203,9 +181,7 @@ const Commandes = () => {
 
   return (
     <div className="container mx-auto p-4">
-      {/* Indicators and filters */}
       <div className="bg-white p-4 rounded-lg shadow-sm mb-4">
-        {/* Indicators */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
           {indicators.map((indicator) => (
             <Card
@@ -227,7 +203,6 @@ const Commandes = () => {
           ))}
         </div>
         
-        {/* Progress bar */}
         <div className="mb-6">
           <div className="flex justify-between text-xs mb-1">
             <span>Taux de planification</span>
@@ -236,7 +211,6 @@ const Commandes = () => {
           <Progress value={progression} className="h-2" />
         </div>
         
-        {/* Filters */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
             <Label htmlFor="secteur-select" className="mb-1 block text-xs">Secteur</Label>
@@ -297,7 +271,6 @@ const Commandes = () => {
           </div>
         </div>
         
-        {/* Switches */}
         <div className="flex flex-wrap items-center gap-6 mb-6">
           <div className="flex items-center space-x-2">
             <Switch 
@@ -327,7 +300,6 @@ const Commandes = () => {
           </div>
         </div>
         
-        {/* Search and buttons */}
         <div className="flex flex-wrap justify-between items-center gap-4">
           <div className="relative w-full md:w-64">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
@@ -359,16 +331,15 @@ const Commandes = () => {
         </div>
       </div>
       
-      {/* Main Content / Table */}
       <div className="bg-white rounded-lg shadow overflow-auto">
-        <table className="min-w-full">
+        <table className="min-w-full border-collapse">
           <thead>
             <tr className="bg-gray-50">
-              <th className="p-3 text-sm font-medium text-gray-600 w-1/5 text-center align-middle">
+              <th className="p-3 text-sm font-medium text-gray-600 w-[200px] text-center align-middle border-r border-gray-200">
                 Semaine {currentWeek}
               </th>
               {weekDates.map((day, index) => (
-                <th key={index} className="p-3 text-center text-sm font-medium text-gray-600">
+                <th key={index} className="p-3 text-center text-sm font-medium text-gray-600 w-[150px] border-r border-gray-200">
                   <div className="text-center">{day.jourNom} {day.numero} {day.mois}</div>
                   <div className="h-6 mt-1 flex justify-center">
                     {day.enRecherche > 0 && (
@@ -376,7 +347,6 @@ const Commandes = () => {
                         {day.enRecherche}
                       </Badge>
                     )}
-                    {/* Always reserve space even if no badge */}
                     {day.enRecherche === 0 && <div className="h-5"></div>}
                   </div>
                 </th>
@@ -390,8 +360,8 @@ const Commandes = () => {
               </tr>
             ) : filteredCommandes.length > 0 ? (
               filteredCommandes.map((commande) => (
-                <tr key={commande.id}>
-                  <td className="p-3 align-top">
+                <tr key={commande.id} className="h-[120px]">
+                  <td className="p-3 align-top border-r border-gray-200">
                     <div className="flex flex-col justify-between h-full">
                       <div>
                         <div className="font-medium">{commande.client_nom}</div>
@@ -420,59 +390,52 @@ const Commandes = () => {
                     return (
                       <td 
                         key={dayIndex} 
-                        className="p-2 align-top relative h-24"
+                        className="p-2 align-top relative border-r border-gray-200 w-[150px]"
                       >
-                        {jour && (
+                        {jour ? (
                           <div 
-                            className={`${getDayClass(jour)} p-2 absolute top-2 right-2 bottom-2 left-2 rounded cursor-pointer`}
+                            className={`${getDayClass(jour)} rounded cursor-pointer p-3 h-full flex flex-col relative`}
                             onClick={() => handleMissionEdit(commande, jour)}
                           >
-                            <div className="relative h-full flex flex-col">
-                              {/* Status at the top */}
-                              <div className="text-sm font-medium mb-2">
-                                {jour.statut}
-                              </div>
-                              
-                              {/* Times */}
-                              <div className="space-y-2 text-xs flex-grow">
-                                {jour.creneaux && jour.creneaux.length > 0 && (
-                                  <div className="grid grid-cols-2 gap-1">
-                                    {jour.creneaux[0]?.split('-').map((time, idx) => (
-                                      <div key={idx} className="font-mono">{time.trim()}</div>
-                                    ))}
-                                  </div>
-                                )}
-                                
-                                {/* Second timeframe or empty space */}
-                                <div className="grid grid-cols-2 gap-1 h-4">
-                                  {jour.creneaux && jour.creneaux.length > 1 && jour.creneaux[1]?.split('-').map((time, idx) => (
-                                    <div key={idx} className="font-mono">{time.trim()}</div>
-                                  ))}
-                                </div>
-                              </div>
-                              
-                              {/* Candidate name if assigned */}
-                              {jour.candidat && (
-                                <div className="text-sm mt-2 font-medium line-clamp-2">
-                                  {jour.candidat}
+                            <div className="text-sm font-medium mb-2">
+                              {jour.statut}
+                            </div>
+                            
+                            <div className="space-y-1 text-xs flex-grow">
+                              {jour.creneaux && jour.creneaux.length > 0 && (
+                                <div className="text-xs font-mono">
+                                  {jour.creneaux[0]?.split('-').join(' - ')}
                                 </div>
                               )}
                               
-                              {/* Edit button */}
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
-                                className="absolute top-0 right-0 h-6 w-6 p-0 bg-white shadow-sm"
-                                title="Planifier un candidat"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleMissionEdit(commande, jour);
-                                }}
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
+                              {jour.creneaux && jour.creneaux.length > 1 && (
+                                <div className="text-xs font-mono">
+                                  {jour.creneaux[1]?.split('-').join(' - ')}
+                                </div>
+                              )}
                             </div>
+                            
+                            {jour.candidat && (
+                              <div className="text-sm mt-auto font-medium">
+                                {jour.candidat}
+                              </div>
+                            )}
+                            
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="absolute top-1 right-1 h-6 w-6 p-0 bg-white/80 shadow-sm"
+                              title="Planifier un candidat"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMissionEdit(commande, jour);
+                              }}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
                           </div>
+                        ) : (
+                          <div className="h-full w-full bg-gray-50 rounded"></div>
                         )}
                       </td>
                     );
@@ -488,7 +451,6 @@ const Commandes = () => {
         </table>
       </div>
       
-      {/* New Commande Dialog */}
       <Dialog open={newCommandeDialogOpen} onOpenChange={setNewCommandeDialogOpen}>
         <DialogContent className="max-w-4xl overflow-hidden">
           <DialogHeader>
@@ -496,12 +458,11 @@ const Commandes = () => {
           </DialogHeader>
           <CommandeForm onClose={() => {
             setNewCommandeDialogOpen(false);
-            fetchCommandes(); // Refresh commandes after adding a new one
+            fetchCommandes();
           }} />
         </DialogContent>
       </Dialog>
       
-      {/* Mission Edit Dialog */}
       {currentMission && (
         <Dialog open={missionEditOpen} onOpenChange={setMissionEditOpen}>
           <DialogContent className="max-w-md">

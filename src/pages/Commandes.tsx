@@ -61,10 +61,10 @@ const Commandes = () => {
   
   // Données factices pour les indicateurs avec icônes
   const [indicateurs, setIndicateurs] = useState<Indicateur[]>([
-    { nom: "En recherche", valeur: 5, couleur: "#FFE4B2", icone: Search },
-    { nom: "Demandées", valeur: 12, couleur: "#B8E0F2", icone: ClipboardList },
-    { nom: "Validées", valeur: 7, couleur: "#C1EAC5", icone: Check },
-    { nom: "Non pourvue", valeur: 0, couleur: "#FFB3B3", icone: AlertTriangle },
+    { nom: "En recherche", valeur: 5, couleur: "#ffe599", icone: Search },
+    { nom: "Demandées", valeur: 12, couleur: "#cfe2f3", icone: ClipboardList },
+    { nom: "Validées", valeur: 7, couleur: "#d9ead3", icone: Check },
+    { nom: "Non pourvue", valeur: 0, couleur: "#dd7e6b", icone: AlertTriangle },
   ]);
   
   // Pour la barre de progression
@@ -102,12 +102,12 @@ const Commandes = () => {
       secteur: "Cuisine",
       statut: "EN_RECHERCHE",
       jours: [
-        { statut: "En recherche", couleurFond: "#FFE4B2", couleurTexte: "#000000" },
+        { statut: "En recherche", couleurFond: "#ffe599", couleurTexte: "#000000" },
         {},
-        { statut: "En recherche", couleurFond: "#FFE4B2", couleurTexte: "#000000", creneaux: ["09:00-15:00"] },
+        { statut: "En recherche", couleurFond: "#ffe599", couleurTexte: "#000000", creneaux: ["09:00-15:00"] },
         {},
-        { statut: "Validé", couleurFond: "#C1EAC5", couleurTexte: "#000000", candidat: "Martin Dupont", creneaux: ["09:00-15:00"] },
-        { statut: "Validé", couleurFond: "#C1EAC5", couleurTexte: "#000000", candidat: "Martin Dupont", creneaux: ["09:00-15:00"] },
+        { statut: "Validé", couleurFond: "#d9ead3", couleurTexte: "#000000", candidat: "Martin Dupont", creneaux: ["09:00-15:00"] },
+        { statut: "Validé", couleurFond: "#d9ead3", couleurTexte: "#000000", candidat: "Martin Dupont", creneaux: ["09:00-15:00"] },
         {}
       ]
     },
@@ -117,11 +117,11 @@ const Commandes = () => {
       secteur: "Réception",
       statut: "VALIDE",
       jours: [
-        { statut: "Validé", couleurFond: "#C1EAC5", couleurTexte: "#000000", candidat: "Sophie Laurent", creneaux: ["07:00-15:00"] },
-        { statut: "Validé", couleurFond: "#C1EAC5", couleurTexte: "#000000", candidat: "Sophie Laurent", creneaux: ["07:00-15:00"] },
-        { statut: "Validé", couleurFond: "#C1EAC5", couleurTexte: "#000000", candidat: "Sophie Laurent", creneaux: ["07:00-15:00"] },
-        { statut: "Validé", couleurFond: "#C1EAC5", couleurTexte: "#000000", candidat: "Sophie Laurent", creneaux: ["07:00-15:00"] },
-        { statut: "Validé", couleurFond: "#C1EAC5", couleurTexte: "#000000", candidat: "Sophie Laurent", creneaux: ["07:00-15:00"] },
+        { statut: "Validé", couleurFond: "#d9ead3", couleurTexte: "#000000", candidat: "Sophie Laurent", creneaux: ["07:00-15:00"] },
+        { statut: "Validé", couleurFond: "#d9ead3", couleurTexte: "#000000", candidat: "Sophie Laurent", creneaux: ["07:00-15:00"] },
+        { statut: "Validé", couleurFond: "#d9ead3", couleurTexte: "#000000", candidat: "Sophie Laurent", creneaux: ["07:00-15:00"] },
+        { statut: "Validé", couleurFond: "#d9ead3", couleurTexte: "#000000", candidat: "Sophie Laurent", creneaux: ["07:00-15:00"] },
+        { statut: "Validé", couleurFond: "#d9ead3", couleurTexte: "#000000", candidat: "Sophie Laurent", creneaux: ["07:00-15:00"] },
         {},
         {}
       ]
@@ -133,9 +133,9 @@ const Commandes = () => {
       statut: "NON_POURVUE",
       jours: [
         {},
-        { statut: "Non pourvue", couleurFond: "#D9D9D9", couleurTexte: "#FF0000", creneaux: ["04:00-12:00"] },
-        { statut: "Non pourvue", couleurFond: "#D9D9D9", couleurTexte: "#FF0000", creneaux: ["04:00-12:00"] },
-        { statut: "Non pourvue", couleurFond: "#D9D9D9", couleurTexte: "#FF0000", creneaux: ["04:00-12:00"] },
+        { statut: "Non pourvue", couleurFond: "#dd7e6b", couleurTexte: "#ffffff", creneaux: ["04:00-12:00"] },
+        { statut: "Non pourvue", couleurFond: "#dd7e6b", couleurTexte: "#ffffff", creneaux: ["04:00-12:00"] },
+        { statut: "Non pourvue", couleurFond: "#dd7e6b", couleurTexte: "#ffffff", creneaux: ["04:00-12:00"] },
         {},
         {},
         {}
@@ -313,7 +313,7 @@ const Commandes = () => {
                 <TableHead key={idx} className="w-1/9 font-medium text-sm text-gray-600 border py-3 text-center">
                   <div>{jour.jour} {jour.numero} {jour.mois}</div>
                   {jour.enRecherche > 0 && (
-                    <Badge className="mt-1 bg-[#FFE4B2] text-gray-700 hover:bg-[#FFE4B2]">
+                    <Badge className="mt-1 bg-[#ffe599] text-gray-700 hover:bg-[#ffe599]">
                       {jour.enRecherche} en recherche
                     </Badge>
                   )}

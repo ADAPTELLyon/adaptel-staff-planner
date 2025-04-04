@@ -11,22 +11,21 @@ export function Header() {
       
       if (authUser) {
         try {
-          // Nous utilisons une approche sans typage strict pour éviter l'erreur TS2769
-          // Note: idéalement, nous devrions utiliser des types générés par Supabase
-          const response = await supabase
-            .from('utilisateurs')
+          // Using any to bypass strict typing issues temporarily
+          const { data, error } = await supabase
+            .from('utilisateurs' as any)
             .select('nom, prenom, email')
             .eq('id', authUser.id)
             .single();
           
-          if (response.data) {
-            setUser(response.data as { email: string; nom?: string; prenom?: string });
+          if (data) {
+            setUser(data as { email: string; nom?: string; prenom?: string });
           } else if (authUser.email) {
             setUser({ email: authUser.email });
           }
           
-          if (response.error) {
-            console.error('Erreur lors de la récupération du profil:', response.error);
+          if (error) {
+            console.error('Erreur lors de la récupération du profil:', error);
           }
         } catch (error) {
           console.error('Erreur inattendue:', error);

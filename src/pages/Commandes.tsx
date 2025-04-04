@@ -19,11 +19,14 @@ import {
   CommandeJour, 
   fetchCommandesForWeek, 
   calculateIndicators, 
-  getCurrentWeekNumber, 
-  getCurrentYear, 
-  generateWeekDates,
   SECTEURS
 } from "@/services/commandesService";
+
+import {
+  getCurrentWeekNumber,
+  getCurrentYear,
+  generateWeekDates
+} from "@/utils/dateUtils";
 
 const Commandes = () => {
   const [commandes, setCommandes] = useState<any[]>([]);
@@ -173,6 +176,29 @@ const Commandes = () => {
   const handleMissionEdit = (commande: any, jour: CommandeJour) => {
     setCurrentMission({ commande, jour });
     setMissionEditOpen(true);
+  };
+
+  // Handle mission status update
+  const handleUpdateMission = async (data: any) => {
+    try {
+      const { error } = await supabase
+        .from('commande_jours')
+        .update({
+          statut: data.statut,
+          candidat: data.candidat,
+          creneaux: data.creneaux
+        })
+        .eq('id', data.id);
+        
+      if (error) throw error;
+      
+      toast.success("Mission mise à jour avec succès");
+      setMissionEditOpen(false);
+      fetchCommandes();
+    } catch (error: any) {
+      console.error('Error updating mission:', error);
+      toast.error(error.message || "Erreur lors de la mise à jour");
+    }
   };
 
   return (
@@ -338,18 +364,20 @@ const Commandes = () => {
         <table className="min-w-full">
           <thead>
             <tr className="bg-gray-50">
-              <th className="p-3 text-center text-sm font-medium text-gray-600 w-1/5">
+              <th className="p-3 text-sm font-medium text-gray-600 w-1/5 text-center align-middle">
                 Semaine {currentWeek}
               </th>
               {weekDates.map((day, index) => (
-                <th key={index} className="p-3 text-center text-sm font-medium text-gray-600">
+                <th key={index} className="p-3 text-center text-sm font-medium text-gray-600 relative">
                   <div className="text-center">{day.jourNom} {day.numero} {day.mois}</div>
-                  <div className="h-6 mt-1">
+                  <div className="h-6 mt-1 flex justify-center">
                     {day.enRecherche > 0 && (
                       <Badge className="bg-[#ffe599] text-black font-normal">
                         {day.enRecherche}
                       </Badge>
                     )}
+                    {/* Always reserve space even if no badge */}
+                    {day.enRecherche === 0 && <div className="h-5"></div>}
                   </div>
                 </th>
               ))}
@@ -394,22 +422,21 @@ const Commandes = () => {
                       >
                         {jour && (
                           <div 
-                            className="rounded p-2 h-full relative"
-                            style={{ backgroundColor: jour.statut ? getDayClass(jour) : 'transparent' }}
+                            className={`rounded p-2 h-full w-full ${getDayClass(jour)} cursor-pointer`}
                             onClick={() => handleMissionEdit(commande, jour)}
                           >
                             {jour.candidat ? (
-                              <div className="text-sm font-medium mb-1 line-clamp-2">
+                              <div className="text-sm font-medium mb-2 line-clamp-2">
                                 {jour.candidat}
                               </div>
                             ) : (
-                              <div className="text-sm font-medium mb-1">
+                              <div className="text-sm font-medium mb-2">
                                 {jour.statut === "En recherche" ? "En recherche" : jour.statut}
                               </div>
                             )}
                             
                             {jour.creneaux && jour.creneaux.length > 0 && (
-                              <div className="space-y-1 text-xs">
+                              <div className="space-y-2 text-xs">
                                 {/* Premier créneau (toujours affiché) */}
                                 <div className="grid grid-cols-2 gap-1">
                                   {jour.creneaux[0]?.split('-').map((time, idx) => (
@@ -418,14 +445,10 @@ const Commandes = () => {
                                 </div>
                                 
                                 {/* Second créneau (affiché s'il existe, sinon espace vide) */}
-                                <div className="grid grid-cols-2 gap-1">
-                                  {jour.creneaux.length > 1 ? (
-                                    jour.creneaux[1]?.split('-').map((time, idx) => (
-                                      <div key={idx} className="font-mono">{time.trim()}</div>
-                                    ))
-                                  ) : (
-                                    <div className="h-4"></div>
-                                  )}
+                                <div className="grid grid-cols-2 gap-1 h-4">
+                                  {jour.creneaux.length > 1 && jour.creneaux[1]?.split('-').map((time, idx) => (
+                                    <div key={idx} className="font-mono">{time.trim()}</div>
+                                  ))}
                                 </div>
                               </div>
                             )}
@@ -435,6 +458,10 @@ const Commandes = () => {
                               variant="outline" 
                               className="absolute top-1 right-1 h-6 w-6 p-0 bg-white shadow-sm"
                               title="Planifier un candidat"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMissionEdit(commande, jour);
+                              }}
                             >
                               <Plus className="h-3 w-3" />
                             </Button>
@@ -456,7 +483,7 @@ const Commandes = () => {
       
       {/* New Commande Dialog */}
       <Dialog open={newCommandeDialogOpen} onOpenChange={setNewCommandeDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl overflow-hidden">
           <DialogHeader>
             <DialogTitle>Nouvelle commande</DialogTitle>
           </DialogHeader>
@@ -477,7 +504,18 @@ const Commandes = () => {
             <div className="grid gap-4 py-4">
               <div>
                 <Label htmlFor="mission-status">Statut</Label>
-                <Select defaultValue={currentMission.jour.statut || "En recherche"}>
+                <Select 
+                  defaultValue={currentMission.jour.statut || "En recherche"}
+                  onValueChange={(value) => {
+                    setCurrentMission({
+                      ...currentMission,
+                      jour: {
+                        ...currentMission.jour,
+                        statut: value
+                      }
+                    });
+                  }}
+                >
                   <SelectTrigger id="mission-status">
                     <SelectValue placeholder="Choisir un statut" />
                   </SelectTrigger>
@@ -490,6 +528,24 @@ const Commandes = () => {
               </div>
               
               <div>
+                <Label htmlFor="candidat">Candidat</Label>
+                <Input 
+                  id="candidat"
+                  value={currentMission.jour.candidat || ""}
+                  onChange={(e) => {
+                    setCurrentMission({
+                      ...currentMission,
+                      jour: {
+                        ...currentMission.jour,
+                        candidat: e.target.value
+                      }
+                    });
+                  }}
+                  placeholder="Nom du candidat"
+                />
+              </div>
+              
+              <div>
                 <Label>Créneau matin</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -498,7 +554,21 @@ const Commandes = () => {
                       type="time" 
                       defaultValue={currentMission.jour.creneaux && currentMission.jour.creneaux[0] ? 
                         currentMission.jour.creneaux[0].split('-')[0].trim() : 
-                        "09:00"} 
+                        "09:00"}
+                      onChange={(e) => {
+                        const creneaux = [...(currentMission.jour.creneaux || [])];
+                        if (!creneaux[0]) creneaux[0] = "09:00-17:00";
+                        const [_, fin] = creneaux[0].split('-');
+                        creneaux[0] = `${e.target.value}-${fin}`;
+                        
+                        setCurrentMission({
+                          ...currentMission,
+                          jour: {
+                            ...currentMission.jour,
+                            creneaux
+                          }
+                        });
+                      }}
                     />
                   </div>
                   <div>
@@ -507,7 +577,21 @@ const Commandes = () => {
                       type="time" 
                       defaultValue={currentMission.jour.creneaux && currentMission.jour.creneaux[0] ? 
                         currentMission.jour.creneaux[0].split('-')[1].trim() : 
-                        "14:00"} 
+                        "17:00"}
+                      onChange={(e) => {
+                        const creneaux = [...(currentMission.jour.creneaux || [])];
+                        if (!creneaux[0]) creneaux[0] = "09:00-17:00";
+                        const [debut, _] = creneaux[0].split('-');
+                        creneaux[0] = `${debut}-${e.target.value}`;
+                        
+                        setCurrentMission({
+                          ...currentMission,
+                          jour: {
+                            ...currentMission.jour,
+                            creneaux
+                          }
+                        });
+                      }}
                     />
                   </div>
                 </div>
@@ -522,7 +606,23 @@ const Commandes = () => {
                       type="time" 
                       defaultValue={currentMission.jour.creneaux && currentMission.jour.creneaux[1] ? 
                         currentMission.jour.creneaux[1].split('-')[0].trim() : 
-                        ""} 
+                        ""}
+                      onChange={(e) => {
+                        const creneaux = [...(currentMission.jour.creneaux || [])];
+                        if (!creneaux[1]) creneaux[1] = `${e.target.value}-23:00`;
+                        else {
+                          const [_, fin] = creneaux[1].split('-');
+                          creneaux[1] = `${e.target.value}-${fin}`;
+                        }
+                        
+                        setCurrentMission({
+                          ...currentMission,
+                          jour: {
+                            ...currentMission.jour,
+                            creneaux
+                          }
+                        });
+                      }}
                     />
                   </div>
                   <div>
@@ -532,6 +632,22 @@ const Commandes = () => {
                       defaultValue={currentMission.jour.creneaux && currentMission.jour.creneaux[1] ? 
                         currentMission.jour.creneaux[1].split('-')[1].trim() : 
                         ""} 
+                      onChange={(e) => {
+                        const creneaux = [...(currentMission.jour.creneaux || [])];
+                        if (!creneaux[1]) creneaux[1] = `18:00-${e.target.value}`;
+                        else {
+                          const [debut, _] = creneaux[1].split('-');
+                          creneaux[1] = `${debut}-${e.target.value}`;
+                        }
+                        
+                        setCurrentMission({
+                          ...currentMission,
+                          jour: {
+                            ...currentMission.jour,
+                            creneaux
+                          }
+                        });
+                      }}
                     />
                   </div>
                 </div>
@@ -541,7 +657,16 @@ const Commandes = () => {
                 <Button variant="outline" onClick={() => setMissionEditOpen(false)}>
                   Annuler
                 </Button>
-                <Button>Enregistrer</Button>
+                <Button className="bg-[#840404] hover:bg-[#6b0303]" onClick={() => {
+                  handleUpdateMission({
+                    id: currentMission.jour.id,
+                    statut: currentMission.jour.statut,
+                    candidat: currentMission.jour.candidat,
+                    creneaux: currentMission.jour.creneaux
+                  });
+                }}>
+                  Enregistrer
+                </Button>
               </div>
             </div>
           </DialogContent>

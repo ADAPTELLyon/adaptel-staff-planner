@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,11 +86,12 @@ const Candidats = () => {
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value, type, checked } = e.target;
-  
+    const { name, value } = e.target;
+    const isCheckbox = (e.target as HTMLInputElement).type === 'checkbox';
+    
     setFormData(prevData => ({
       ...prevData,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: isCheckbox ? (e.target as HTMLInputElement).checked : value
     }));
   };
   

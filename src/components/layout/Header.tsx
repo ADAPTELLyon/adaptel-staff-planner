@@ -10,16 +10,27 @@ export function Header() {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       
       if (authUser) {
-        const { data } = await supabase
-          .from('utilisateurs')
-          .select('nom, prenom, email')
-          .eq('id', authUser.id)
-          .single();
-        
-        if (data) {
-          setUser(data);
-        } else {
-          setUser({ email: authUser.email || '' });
+        // Utilisons une approche typée sécurisée pour éviter les erreurs TS2769
+        try {
+          // Récupération du profil utilisateur si l'utilisateur est authentifié
+          const { data, error } = await supabase
+            .from('utilisateurs')
+            .select('nom, prenom, email')
+            .eq('id', authUser.id)
+            .maybeSingle();
+          
+          if (data) {
+            setUser(data);
+          } else if (authUser.email) {
+            // Fallback en cas d'absence de profil utilisateur
+            setUser({ email: authUser.email });
+          }
+          
+          if (error) {
+            console.error('Erreur lors de la récupération du profil:', error);
+          }
+        } catch (error) {
+          console.error('Erreur inattendue:', error);
         }
       }
     };

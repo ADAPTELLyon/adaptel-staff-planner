@@ -1,0 +1,47 @@
+
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+
+export function Header() {
+  const [user, setUser] = useState<{ email: string; nom?: string; prenom?: string } | null>(null);
+  
+  useEffect(() => {
+    const getUserProfile = async () => {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      
+      if (authUser) {
+        const { data } = await supabase
+          .from('utilisateurs')
+          .select('nom, prenom, email')
+          .eq('id', authUser.id)
+          .single();
+        
+        if (data) {
+          setUser(data);
+        } else {
+          setUser({ email: authUser.email || '' });
+        }
+      }
+    };
+    
+    getUserProfile();
+  }, []);
+
+  return (
+    <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b bg-white px-4 lg:px-8">
+      <div className="flex items-center">
+        <h1 className="text-xl font-semibold text-[#840404]">Adaptel Lyon</h1>
+      </div>
+      
+      <div className="flex items-center gap-2">
+        {user && (
+          <span className="text-sm font-medium">
+            {user.prenom && user.nom 
+              ? `${user.prenom} ${user.nom}`
+              : user.email}
+          </span>
+        )}
+      </div>
+    </header>
+  );
+}

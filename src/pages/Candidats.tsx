@@ -87,11 +87,12 @@ const Candidats = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    const isCheckbox = (e.target as HTMLInputElement).type === 'checkbox';
+    const target = e.target as HTMLInputElement;
+    const isCheckbox = target.type === 'checkbox';
     
     setFormData(prevData => ({
       ...prevData,
-      [name]: isCheckbox ? (e.target as HTMLInputElement).checked : value
+      [name]: isCheckbox ? target.checked : value
     }));
   };
   

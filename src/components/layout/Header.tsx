@@ -13,14 +13,14 @@ export function Header() {
         try {
           // Using any to bypass strict typing issues temporarily
           const { data, error } = await supabase
-            .from('utilisateurs')
+            .from('candidats')
             .select('nom, prenom, email')
             .eq('id', authUser.id)
             .single();
           
           if (data) {
-            // Fix the type conversion issue by using a type assertion
-            setUser(data as { email: string; nom?: string; prenom?: string });
+            // Utilisation d'une conversion explicite avec as unknown as
+            setUser(data as unknown as { email: string; nom?: string; prenom?: string });
           } else if (authUser.email) {
             setUser({ email: authUser.email });
           }

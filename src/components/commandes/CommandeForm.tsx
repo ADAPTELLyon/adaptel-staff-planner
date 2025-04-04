@@ -225,8 +225,21 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
     }
     
     try {
+      // Get client information for storing the name
+      const { data: clientData } = await supabase
+        .from('clients')
+        .select('nom')
+        .eq('id', clientId)
+        .single();
+        
+      if (!clientData) {
+        toast.error("Client introuvable");
+        return;
+      }
+      
       // Generate a unique ID for the commande
       const commandeId = uuidv4();
+      const currentYear = new Date().getFullYear();
       
       // Create the base commande
       const { error: commandeError } = await supabase
@@ -234,13 +247,11 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
         .insert({
           id: commandeId,
           client_id: clientId,
-          semaine: parseInt(semaine),
+          client_nom: clientData.nom,
           secteur: secteur,
-          motif: motif,
-          personne_remplacee: motif === "Remplacement d'une personne absente" ? personneRemplacee : null,
-          raison_remplacement: motif === "Remplacement d'une personne absente" ? raisonRemplacement : null,
-          raison_accroissement: motif === "Accroissement d'activité" ? raisonAccroissement : null,
-          commentaire: commentaire || null
+          semaine: parseInt(semaine),
+          annee: currentYear,
+          statut: "En attente"
         });
       
       if (commandeError) throw commandeError;
@@ -254,15 +265,21 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
         // For each active creneau, create a commande_jour entry
         const creatingCreneaux = [];
         
+        // Calculate the date for this day of the week
+        const weekNumber = parseInt(semaine);
+        const date = new Date(currentYear, 0, 1 + (weekNumber - 1) * 7);
+        const dayOfWeek = date.getDay();
+        const daysToAdd = jour.jour_semaine - (dayOfWeek === 0 ? 7 : dayOfWeek) + 1;
+        const jourDate = new Date(date);
+        jourDate.setDate(date.getDate() + daysToAdd);
+        
         if (creneaux.matin) {
           creatingCreneaux.push({
             commande_id: commandeId,
             jour_semaine: jour.jour_semaine,
-            creneau_type: 'Matin',
-            heure_debut: creneaux.matin_debut,
-            heure_fin: creneaux.matin_fin,
-            nb_personnes: creneaux.matin_personnes,
-            statut: 'En recherche'
+            jour_date: jourDate.toISOString().split('T')[0],
+            statut: 'En recherche',
+            creneaux: [`Matin: ${creneaux.matin_debut}-${creneaux.matin_fin}, ${creneaux.matin_personnes} pers.`]
           });
         }
         
@@ -270,11 +287,9 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
           creatingCreneaux.push({
             commande_id: commandeId,
             jour_semaine: jour.jour_semaine,
-            creneau_type: 'Soir',
-            heure_debut: creneaux.soir_debut,
-            heure_fin: creneaux.soir_fin,
-            nb_personnes: creneaux.soir_personnes,
-            statut: 'En recherche'
+            jour_date: jourDate.toISOString().split('T')[0],
+            statut: 'En recherche',
+            creneaux: [`Soir: ${creneaux.soir_debut}-${creneaux.soir_fin}, ${creneaux.soir_personnes} pers.`]
           });
         }
         
@@ -282,11 +297,9 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
           creatingCreneaux.push({
             commande_id: commandeId,
             jour_semaine: jour.jour_semaine,
-            creneau_type: 'Nuit',
-            heure_debut: creneaux.nuit_debut,
-            heure_fin: creneaux.nuit_fin,
-            nb_personnes: creneaux.nuit_personnes,
-            statut: 'En recherche'
+            jour_date: jourDate.toISOString().split('T')[0],
+            statut: 'En recherche',
+            creneaux: [`Nuit: ${creneaux.nuit_debut}-${creneaux.nuit_fin}, ${creneaux.nuit_personnes} pers.`]
           });
         }
         

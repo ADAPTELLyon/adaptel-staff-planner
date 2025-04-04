@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -13,7 +12,6 @@ import { v4 as uuidv4 } from "uuid";
 import { SECTEURS } from "@/services/commandesService";
 import { generateWeekOptions, getCurrentWeekNumber } from "@/utils/dateUtils";
 
-// Define the CommandeForm component props
 interface CommandeFormProps {
   onClose: () => void;
 }
@@ -30,7 +28,7 @@ interface JourInfo {
   creneaux: {
     matin: boolean;
     soir: boolean;
-    nuit: boolean; // Only for Reception
+    nuit: boolean;
     matin_debut: string;
     matin_fin: string;
     soir_debut: string;
@@ -44,7 +42,6 @@ interface JourInfo {
 }
 
 const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
-  // Form state
   const [secteur, setSecteur] = useState<string>("");
   const [clientId, setClientId] = useState<string>("");
   const [semaine, setSemaine] = useState<string>(getCurrentWeekNumber().toString());
@@ -54,17 +51,14 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
   const [raisonAccroissement, setRaisonAccroissement] = useState<string>("");
   const [commentaire, setCommentaire] = useState<string>("");
   
-  // Clients list filtered by selected sector
   const [clients, setClients] = useState<Client[]>([]);
   
-  // Week options
   const [weekOptions, setWeekOptions] = useState<{ value: string; label: string }[]>([]);
   
-  // Jours - init one object for each day of the week
   const [jours, setJours] = useState<JourInfo[]>([
     ...Array(7).fill(null).map((_, idx) => ({
       actif: false,
-      jour_semaine: idx + 1, // 1 = Monday, 7 = Sunday
+      jour_semaine: idx + 1,
       creneaux: {
         matin: false,
         soir: false,
@@ -82,7 +76,6 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
     }))
   ]);
   
-  // Fetch clients filtered by sector
   useEffect(() => {
     const fetchClients = async () => {
       if (!secteur) return;
@@ -110,14 +103,12 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
     fetchClients();
   }, [secteur]);
   
-  // Load week options
   useEffect(() => {
     const currentYear = new Date().getFullYear();
     const options = generateWeekOptions(currentYear);
     setWeekOptions(options);
   }, []);
   
-  // Toggle all days active/inactive
   const toggleAllDays = (active: boolean) => {
     setJours(jours.map(jour => ({
       ...jour,
@@ -125,14 +116,12 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
     })));
   };
   
-  // Toggle a specific day
   const toggleDay = (dayIndex: number) => {
     setJours(jours.map((jour, idx) => 
       idx === dayIndex ? { ...jour, actif: !jour.actif } : jour
     ));
   };
   
-  // Toggle a specific creneau for a day
   const toggleCreneau = (dayIndex: number, creneau: 'matin' | 'soir' | 'nuit') => {
     setJours(jours.map((jour, idx) => 
       idx === dayIndex ? {
@@ -145,7 +134,6 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
     ));
   };
   
-  // Update creneau time or persons
   const updateCreneau = (
     dayIndex: number, 
     creneau: 'matin' | 'soir' | 'nuit',
@@ -163,16 +151,13 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
     ));
   };
   
-  // Replicate the first active day's creneaux to all other active days
   const replicateCreneaux = () => {
-    // Find the first active day
     const firstActiveDay = jours.find(jour => jour.actif);
     if (!firstActiveDay) {
       toast.error("Aucun jour n'est activé");
       return;
     }
     
-    // Apply its creneaux to all other active days
     setJours(jours.map(jour => 
       jour.actif ? {
         ...jour,
@@ -183,11 +168,9 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
     toast.success("Horaires répliqués sur tous les jours actifs");
   };
   
-  // Submit the form
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     
-    // Validation
     if (!secteur) {
       toast.error("Veuillez sélectionner un secteur");
       return;
@@ -208,14 +191,12 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
       return;
     }
     
-    // Check if any day is active
     const anyDayActive = jours.some(jour => jour.actif);
     if (!anyDayActive) {
       toast.error("Veuillez activer au moins un jour");
       return;
     }
     
-    // Check if any active day has at least one creneau
     const anyCreneauActive = jours.some(jour => 
       jour.actif && (jour.creneaux.matin || jour.creneaux.soir || jour.creneaux.nuit)
     );
@@ -225,7 +206,6 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
     }
     
     try {
-      // Get client information for storing the name
       const { data: clientData } = await supabase
         .from('clients')
         .select('nom')
@@ -237,11 +217,9 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
         return;
       }
       
-      // Generate a unique ID for the commande
       const commandeId = uuidv4();
       const currentYear = new Date().getFullYear();
       
-      // Create the base commande
       const { error: commandeError } = await supabase
         .from('commandes')
         .insert({
@@ -256,16 +234,13 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
       
       if (commandeError) throw commandeError;
       
-      // Create the commande_jours entries for each active day
       for (const jour of jours) {
         if (!jour.actif) continue;
         
         const { creneaux } = jour;
         
-        // For each active creneau, create a commande_jour entry
         const creatingCreneaux = [];
         
-        // Calculate the date for this day of the week
         const weekNumber = parseInt(semaine);
         const date = new Date(currentYear, 0, 1 + (weekNumber - 1) * 7);
         const dayOfWeek = date.getDay();
@@ -303,7 +278,6 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
           });
         }
         
-        // Insert all creneaux for this day
         if (creatingCreneaux.length > 0) {
           const { error: joursError } = await supabase
             .from('commande_jours')
@@ -321,7 +295,6 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
     }
   };
   
-  // Get day name for display
   const getDayName = (dayIndex: number) => {
     const days = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
     return days[dayIndex];
@@ -329,11 +302,9 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
   
   return (
     <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[70vh] overflow-y-auto">
-      {/* Left side - General information */}
       <div className="space-y-4 p-4 border rounded-md">
         <h3 className="text-lg font-semibold mb-4">Informations générales</h3>
         
-        {/* Secteur */}
         <div className="space-y-2">
           <Label htmlFor="secteur">Secteur <span className="text-red-500">*</span></Label>
           <Select 
@@ -351,7 +322,6 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
           </Select>
         </div>
         
-        {/* Client */}
         <div className="space-y-2">
           <Label htmlFor="client">Client <span className="text-red-500">*</span></Label>
           <Select 
@@ -374,7 +344,6 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
           </Select>
         </div>
         
-        {/* Semaine */}
         <div className="space-y-2">
           <Label htmlFor="semaine">Semaine <span className="text-red-500">*</span></Label>
           <Select 
@@ -392,7 +361,6 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
           </Select>
         </div>
         
-        {/* Motif */}
         <div className="space-y-2">
           <Label htmlFor="motif">Motif <span className="text-red-500">*</span></Label>
           <Select 
@@ -410,7 +378,6 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
           </Select>
         </div>
         
-        {/* Conditional fields based on motif */}
         {motif === "Remplacement d'une personne absente" && (
           <>
             <div className="space-y-2">
@@ -446,7 +413,6 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
           </div>
         )}
         
-        {/* Commentaire */}
         <div className="space-y-2">
           <div className="flex items-center">
             <Label htmlFor="commentaire" className="mr-2">Commentaire</Label>
@@ -462,11 +428,9 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
         </div>
       </div>
       
-      {/* Right side - Day management */}
       <div className="space-y-4 p-4 border rounded-md">
         <h3 className="text-lg font-semibold mb-4">Jours et créneaux</h3>
         
-        {/* Days grid */}
         <div className="space-y-4">
           {jours.map((jour, idx) => (
             <div key={idx} className="border rounded-md p-3">
@@ -480,7 +444,6 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
               
               {jour.actif && (
                 <div className="pl-4 space-y-3">
-                  {/* Matin/Midi (available for all sectors) */}
                   <div className="flex flex-col">
                     <div className="flex items-center mb-2">
                       <Switch 
@@ -523,7 +486,6 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
                     )}
                   </div>
                   
-                  {/* Soir (available for all sectors except Étages) */}
                   {secteur !== "Étages" && (
                     <div className="flex flex-col">
                       <div className="flex items-center mb-2">
@@ -568,7 +530,6 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
                     </div>
                   )}
                   
-                  {/* Nuit (only available for Reception) */}
                   {secteur === "Réception" && (
                     <div className="flex flex-col">
                       <div className="flex items-center mb-2">
@@ -618,7 +579,6 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
           ))}
         </div>
         
-        {/* Quick action buttons */}
         <div className="flex flex-wrap gap-2 pt-4">
           <Button 
             type="button" 
@@ -645,7 +605,6 @@ const CommandeForm: React.FC<CommandeFormProps> = ({ onClose }) => {
         </div>
       </div>
       
-      {/* Form buttons */}
       <div className="flex justify-end gap-2 col-span-1 md:col-span-2">
         <Button type="button" variant="outline" onClick={onClose}>
           Annuler

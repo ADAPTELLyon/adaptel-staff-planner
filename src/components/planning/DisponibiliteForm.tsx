@@ -1,18 +1,10 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2 } from "lucide-react";
-import { toast } from "sonner";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -20,595 +12,256 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { z } from "zod";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { supabase } from "@/integrations/supabase/client";
-import { SECTEURS, generateWeekOptions } from "@/services/commandesService";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { CalendarIcon } from "lucide-react";
 
-interface Candidat {
-  id: string;
-  nom: string;
-  prenom: string;
-  secteurs: string[];
-}
+import { getCurrentWeekNumber, generateWeekDates, formatDateToISOString } from "@/utils/dateUtils";
 
-interface JourDisponibilite {
-  jour_semaine: number;
-  jour_date: string;
-  statut: "Non renseigné" | "Non dispo" | "Dispo";
-  creneaux: {
-    matin: boolean;
-    soir: boolean;
-    nuit: boolean;
-  };
-  hasMission: boolean;
-}
-
-const jourSchema = z.object({
-  jour_semaine: z.number(),
-  jour_date: z.string(),
-  statut: z.enum(["Non renseigné", "Non dispo", "Dispo"]),
-  creneaux: z.object({
-    matin: z.boolean(),
-    soir: z.boolean(),
-    nuit: z.boolean()
-  }),
-  hasMission: z.boolean()
-});
-
-const formSchema = z.object({
-  secteur: z.string(),
-  candidat_id: z.string(),
-  semaine: z.string(),
-  informations: z.string().optional(),
-  jours: z.array(jourSchema)
-});
-
-type FormValues = z.infer<typeof formSchema>;
-
-interface DisponibiliteFormProps {
-  onClose: () => void;
-}
-
-const DisponibiliteForm = ({ onClose }: DisponibiliteFormProps) => {
-  const [candidats, setCandidats] = useState<Candidat[]>([]);
-  const [filteredCandidats, setFilteredCandidats] = useState<Candidat[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [weekOptions, setWeekOptions] = useState<{ value: string; label: string }[]>([]);
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-  const [joursDates, setJoursDates] = useState<{ date: Date; jour: number; jourNom: string; numero: number; mois: string }[]>([]);
-
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      secteur: '',
-      candidat_id: '',
-      semaine: '',
-      informations: '',
-      jours: []
-    }
+const DisponibiliteForm = ({ onClose }: { onClose: () => void }) => {
+  const [formData, setFormData] = useState({
+    candidat: "",
+    semaine: getCurrentWeekNumber().toString(),
+    annee: new Date().getFullYear().toString(),
+    jours: [
+      { jour_semaine: 1, date: "", disponible: false, creneaux: [] },
+      { jour_semaine: 2, date: "", disponible: false, creneaux: [] },
+      { jour_semaine: 3, date: "", disponible: false, creneaux: [] },
+      { jour_semaine: 4, date: "", disponible: false, creneaux: [] },
+      { jour_semaine: 5, date: "", disponible: false, creneaux: [] },
+      { jour_semaine: 6, date: "", disponible: false, creneaux: [] },
+      { jour_semaine: 7, date: "", disponible: false, creneaux: [] },
+    ],
+    commentaire: "",
   });
-
-  // Watch for changes in fields
-  const watchSecteur = form.watch('secteur');
-  const watchSemaine = form.watch('semaine');
-  const watchCandidatId = form.watch('candidat_id');
   
-  // Fetch candidats from Supabase
-  const fetchCandidats = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('candidats')
-        .select('id, nom, prenom, secteurs')
-        .eq('actif', true);
-      
-      if (error) throw error;
-      setCandidats(data || []);
-    } catch (error) {
-      console.error('Error fetching candidats:', error);
-      toast.error('Erreur lors du chargement des candidats');
-    }
-  };
+  const [candidats, setCandidats] = useState<{id: string, nom: string, prenom: string}[]>([]);
+  const [weekDates, setWeekDates] = useState<any[]>([]);
+  const [date, setDate] = React.useState<Date | undefined>(new Date());
 
-  // Init week options
-  const initWeekOptions = () => {
-    const options = generateWeekOptions(currentYear);
-    setWeekOptions(options);
+  useEffect(() => {
+    // Fetch candidats from Supabase
+    const fetchCandidats = async () => {
+      // Simulate fetching data (replace with actual Supabase fetch)
+      setCandidats([
+        { id: "1", nom: "Doe", prenom: "John" },
+        { id: "2", nom: "Smith", prenom: "Jane" },
+      ]);
+    };
     
-    // Set default to current week
-    const currentWeekOption = options.find(opt => 
-      opt.label.includes(`Semaine ${new Date().getWeekNumber()}`)
-    );
-    
-    if (currentWeekOption) {
-      form.setValue('semaine', currentWeekOption.value);
-    }
-  };
-
-  // Check if a candidat has missions for specific days
-  const checkExistingMissions = async (candidatId: string, weekNum: number, year: number) => {
-    try {
-      // Find commande_jours where this candidat is assigned
-      const { data, error } = await supabase
-        .from('commande_jours')
-        .select('jour_semaine, jour_date')
-        .eq('candidat', candidatId)
-        .like('jour_date', `${year}-%`);
-      
-      if (error) throw error;
-      
-      return data || [];
-    } catch (error) {
-      console.error('Error checking for existing missions:', error);
-      return [];
-    }
-  };
-
-  // Check if the candidat already has disponibilities recorded for this week
-  const checkExistingDisponibilities = async (candidatId: string, weekNum: number, year: number) => {
-    // This would require a table specifically for candidat disponibilities
-    // For now we return empty data as this table doesn't exist yet
-    return [];
-  };
-
-  // Update jours when semaine and candidat changes
-  useEffect(() => {
-    if (watchSemaine && watchCandidatId) {
-      const weekNum = parseInt(watchSemaine);
-      const year = currentYear;
-      
-      const updateJoursWithAvailability = async () => {
-        // Generate dates for the selected week
-        const dates = generateWeekDates(weekNum, year);
-        setJoursDates(dates);
-        
-        // Check for existing missions
-        const existingMissions = await checkExistingMissions(watchCandidatId, weekNum, year);
-        const existingDispos = await checkExistingDisponibilities(watchCandidatId, weekNum, year);
-        
-        // Create jours array with default values
-        const joursArray = dates.map(date => {
-          const dateStr = formatDateToISO(date.date);
-          const hasMission = existingMissions.some(
-            mission => formatDateToISO(new Date(mission.jour_date)) === dateStr
-          );
-          
-          // Check if we already have disponibility data
-          const existingDispo = existingDispos.find(
-            dispo => dispo.jour_date === dateStr
-          );
-          
-          return {
-            jour_semaine: date.jour,
-            jour_date: dateStr,
-            statut: existingDispo ? existingDispo.statut : "Non renseigné" as "Non renseigné" | "Non dispo" | "Dispo",
-            creneaux: existingDispo ? existingDispo.creneaux : {
-              matin: false,
-              soir: false,
-              nuit: false
-            },
-            hasMission
-          };
-        });
-        
-        form.setValue('jours', joursArray);
-      };
-      
-      updateJoursWithAvailability();
-    }
-  }, [watchSemaine, watchCandidatId, form]);
-
-  // Filter candidats when secteur changes
-  useEffect(() => {
-    if (watchSecteur) {
-      const filtered = candidats.filter(candidat => 
-        candidat.secteurs && candidat.secteurs.includes(watchSecteur)
-      );
-      setFilteredCandidats(filtered);
-      
-      // Reset candidat selection when sector changes
-      form.setValue('candidat_id', '');
-    } else {
-      setFilteredCandidats(candidats);
-    }
-  }, [watchSecteur, candidats, form]);
-
-  useEffect(() => {
     fetchCandidats();
-    initWeekOptions();
   }, []);
-
-  // Format date to ISO string (YYYY-MM-DD)
-  const formatDateToISO = (date: Date) => {
-    return date.toISOString().split('T')[0];
-  };
-
-  // Extension of Date to get week number
-  declare global {
-    interface Date {
-      getWeekNumber(): number;
-    }
-  }
   
-  Date.prototype.getWeekNumber = function() {
-    const d = new Date(Date.UTC(this.getFullYear(), this.getMonth(), this.getDate()));
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  useEffect(() => {
+    // Generate week dates
+    const weekNum = parseInt(formData.semaine);
+    const year = parseInt(formData.annee);
+    const dates = generateWeekDates(weekNum, year);
+    setWeekDates(dates);
+    
+    // Update form data with dates
+    setFormData(prev => ({
+      ...prev,
+      jours: prev.jours.map((jour, index) => ({
+        ...jour,
+        date: formatDateToISOString(dates[index].date)
+      }))
+    }));
+  }, [formData.semaine, formData.annee]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Helper function to generate dates for a specific week
-  const generateWeekDates = (weekNumber: number, year: number) => {
-    // Start with Jan 1
-    const firstDayOfYear = new Date(year, 0, 1);
-    
-    // Calculate days to add to reach the first day of the target week
-    // (considering Monday as the first day of the week)
-    const daysToFirstDayOfWeek = (weekNumber - 1) * 7 - firstDayOfYear.getDay() + 
-      (firstDayOfYear.getDay() === 0 ? -6 : 1);
-    
-    const firstDayOfWeek = new Date(year, 0, 1 + daysToFirstDayOfWeek);
-    
-    // Generate array of dates for the week
-    return Array.from({ length: 7 }).map((_, idx) => {
-      const date = new Date(firstDayOfWeek);
-      date.setDate(firstDayOfWeek.getDate() + idx);
-      return {
-        date,
-        jour: idx + 1, // 1 = Monday, 7 = Sunday
-        jourNom: ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"][idx],
-        numero: date.getDate(),
-        mois: ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"][date.getMonth()]
-      };
+  const handleCheckboxChange = (index: number) => {
+    setFormData(prev => {
+      const updatedJours = [...prev.jours];
+      updatedJours[index].disponible = !updatedJours[index].disponible;
+      return { ...prev, jours: updatedJours };
     });
   };
 
-  // Helper function to determine if a creneau should be available for a sector
-  const isCreneauAvailable = (secteur: string, creneau: 'matin' | 'soir' | 'nuit') => {
-    if (creneau === 'nuit') return secteur === 'Réception';
-    if (secteur === 'Étages') return creneau === 'matin';
-    return true;
-  };
-
-  // Toggle all days status
-  const setAllDaysStatus = (status: "Dispo" | "Non dispo") => {
-    const updatedJours = form.getValues('jours').map(jour => {
-      if (!jour.hasMission) {
-        return {
-          ...jour,
-          statut: status,
-          creneaux: status === "Dispo" ? jour.creneaux : { matin: false, soir: false, nuit: false }
-        };
-      }
-      return jour;
+  const handleCreneauChange = (index: number, creneauIndex: number, value: string) => {
+    setFormData(prev => {
+      const updatedJours = [...prev.jours];
+      const updatedCreneaux = [...(updatedJours[index].creneaux || [])];
+      updatedCreneaux[creneauIndex] = value;
+      updatedJours[index].creneaux = updatedCreneaux;
+      return { ...prev, jours: updatedJours };
     });
-    form.setValue('jours', updatedJours);
   };
 
-  // Toggle all creneaux for available days
-  const toggleAllCreneaux = (active: boolean) => {
-    const updatedJours = form.getValues('jours').map(jour => {
-      if (jour.statut === "Dispo" && !jour.hasMission) {
-        return {
-          ...jour,
-          creneaux: {
-            matin: isCreneauAvailable(watchSecteur, 'matin') ? active : false,
-            soir: isCreneauAvailable(watchSecteur, 'soir') ? active : false,
-            nuit: isCreneauAvailable(watchSecteur, 'nuit') ? active : false
-          }
-        };
-      }
-      return jour;
+  const addCreneau = (index: number) => {
+    setFormData(prev => {
+      const updatedJours = [...prev.jours];
+      updatedJours[index].creneaux = [...(updatedJours[index].creneaux || []), ""];
+      return { ...prev, jours: updatedJours };
     });
-    form.setValue('jours', updatedJours);
   };
 
-  // Save the disponibilities
-  const saveDisponibilites = async (values: FormValues) => {
-    setLoading(true);
-    try {
-      // For now, we just show a success message since we don't have a table for disponibilities yet
-      // In a real implementation, you would save this data to a dedicated table
-      
-      toast.success('Disponibilités enregistrées avec succès');
-      onClose();
-    } catch (error) {
-      console.error('Error saving disponibilities:', error);
-      toast.error('Erreur lors de l\'enregistrement des disponibilités');
-    } finally {
-      setLoading(false);
-    }
+  const removeCreneau = (index: number, creneauIndex: number) => {
+    setFormData(prev => {
+      const updatedJours = [...prev.jours];
+      updatedJours[index].creneaux = updatedJours[index].creneaux?.filter((_, i) => i !== creneauIndex);
+      return { ...prev, jours: updatedJours };
+    });
   };
-
-  const onSubmit = (values: FormValues) => {
-    saveDisponibilites(values);
+  
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Simulate submitting data (replace with actual Supabase insert)
+    console.log("Form Data Submitted:", formData);
+    
+    // Close the dialog
+    onClose();
   };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Left column - general info */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium">Informations générales</h3>
-            
-            <FormField
-              control={form.control}
-              name="secteur"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Secteur*</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
-                    defaultValue={field.value}
-                    value={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner un secteur" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {SECTEURS.map((secteur) => (
-                        <SelectItem key={secteur} value={secteur}>
-                          {secteur}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="candidat_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Candidat*</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
-                    defaultValue={field.value}
-                    value={field.value}
-                    disabled={!watchSecteur}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder={watchSecteur ? "Sélectionner un candidat" : "Sélectionnez d'abord un secteur"} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {filteredCandidats.map((candidat) => (
-                        <SelectItem key={candidat.id} value={candidat.id}>
-                          {`${candidat.prenom} ${candidat.nom}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="semaine"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Semaine*</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
-                    defaultValue={field.value}
-                    value={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner une semaine" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {weekOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="informations"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Informations complémentaires</FormLabel>
-                  <FormControl>
-                    <Textarea 
-                      placeholder="Informations complémentaires sur les disponibilités" 
-                      className="resize-none" 
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <div className="flex flex-col gap-2 pt-4">
-              <Button 
-                type="button" 
-                variant="outline"
-                onClick={() => setAllDaysStatus("Dispo")}
-              >
-                Mettre tous les jours en Disponible
-              </Button>
-              <Button 
-                type="button" 
-                variant="outline"
-                onClick={() => setAllDaysStatus("Non dispo")}
-              >
-                Mettre tous les jours en Non disponible
-              </Button>
-              <Button 
-                type="button" 
-                variant="outline"
-                onClick={() => toggleAllCreneaux(true)}
-              >
-                Activer tous les créneaux possibles
-              </Button>
-            </div>
-          </div>
-          
-          {/* Right column - days details */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium">Disponibilités par jour</h3>
-            
-            <div className="space-y-4">
-              {form.getValues('jours')?.map((jour, index) => (
-                <div key={index} className={`border rounded-md p-4 ${jour.hasMission ? 'bg-gray-100' : ''}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium">
-                      {joursDates[index]?.jourNom} {joursDates[index]?.numero} {joursDates[index]?.mois}
-                    </h4>
-                    
-                    {jour.hasMission ? (
-                      <Badge variant="secondary">Mission planifiée</Badge>
-                    ) : (
-                      <FormField
-                        control={form.control}
-                        name={`jours.${index}.statut`}
-                        render={({ field }) => (
-                          <FormItem className="space-y-0">
-                            <FormControl>
-                              <RadioGroup
-                                onValueChange={field.onChange as (value: string) => void}
-                                defaultValue={field.value}
-                                value={field.value}
-                                className="flex gap-4"
-                              >
-                                <FormItem className="flex items-center space-x-2 space-y-0">
-                                  <FormControl>
-                                    <RadioGroupItem value="Non renseigné" />
-                                  </FormControl>
-                                  <FormLabel className="text-sm font-normal">
-                                    Non renseigné
-                                  </FormLabel>
-                                </FormItem>
-                                <FormItem className="flex items-center space-x-2 space-y-0">
-                                  <FormControl>
-                                    <RadioGroupItem value="Non dispo" />
-                                  </FormControl>
-                                  <FormLabel className="text-sm font-normal">
-                                    Non dispo
-                                  </FormLabel>
-                                </FormItem>
-                                <FormItem className="flex items-center space-x-2 space-y-0">
-                                  <FormControl>
-                                    <RadioGroupItem value="Dispo" />
-                                  </FormControl>
-                                  <FormLabel className="text-sm font-normal">
-                                    Dispo
-                                  </FormLabel>
-                                </FormItem>
-                              </RadioGroup>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
-                  </div>
-                  
-                  {form.getValues(`jours.${index}.statut`) === "Dispo" && !jour.hasMission && (
-                    <div className="border-t pt-2 space-y-2">
-                      <p className="text-sm font-medium">Créneaux disponibles:</p>
-                      
-                      {isCreneauAvailable(watchSecteur, 'matin') && (
-                        <FormField
-                          control={form.control}
-                          name={`jours.${index}.creneaux.matin`}
-                          render={({ field }) => (
-                            <FormItem className="flex items-center space-x-2 space-y-0">
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value}
-                                  onCheckedChange={field.onChange}
-                                />
-                              </FormControl>
-                              <FormLabel className="text-sm font-normal">
-                                Matin/Midi
-                              </FormLabel>
-                            </FormItem>
-                          )}
-                        />
-                      )}
-                      
-                      {isCreneauAvailable(watchSecteur, 'soir') && (
-                        <FormField
-                          control={form.control}
-                          name={`jours.${index}.creneaux.soir`}
-                          render={({ field }) => (
-                            <FormItem className="flex items-center space-x-2 space-y-0">
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value}
-                                  onCheckedChange={field.onChange}
-                                />
-                              </FormControl>
-                              <FormLabel className="text-sm font-normal">
-                                Soir
-                              </FormLabel>
-                            </FormItem>
-                          )}
-                        />
-                      )}
-                      
-                      {isCreneauAvailable(watchSecteur, 'nuit') && (
-                        <FormField
-                          control={form.control}
-                          name={`jours.${index}.creneaux.nuit`}
-                          render={({ field }) => (
-                            <FormItem className="flex items-center space-x-2 space-y-0">
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value}
-                                  onCheckedChange={field.onChange}
-                                />
-                              </FormControl>
-                              <FormLabel className="text-sm font-normal">
-                                Nuit
-                              </FormLabel>
-                            </FormItem>
-                          )}
-                        />
-                      )}
-                    </div>
-                  )}
-                </div>
+    <form onSubmit={handleSubmit} className="grid gap-4">
+      <div>
+        <Label htmlFor="candidat">Candidat</Label>
+        <Select 
+          value={formData.candidat}
+          onValueChange={(value) => setFormData(prev => ({ ...prev, candidat: value }))}
+        >
+          <SelectTrigger id="candidat">
+            <SelectValue placeholder="Sélectionner un candidat" />
+          </SelectTrigger>
+          <SelectContent>
+            {candidats.map((candidat) => (
+              <SelectItem key={candidat.id} value={candidat.id}>
+                {candidat.prenom} {candidat.nom}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <Label htmlFor="semaine">Semaine</Label>
+          <Select
+            value={formData.semaine}
+            onValueChange={(value) => setFormData(prev => ({ ...prev, semaine: value }))}
+          >
+            <SelectTrigger id="semaine">
+              <SelectValue placeholder="Sélectionner une semaine" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 52 }, (_, i) => i + 1).map((week) => (
+                <SelectItem key={week} value={week.toString()}>
+                  {week}
+                </SelectItem>
               ))}
-            </div>
-          </div>
+            </SelectContent>
+          </Select>
         </div>
         
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Annuler
-          </Button>
-          <Button type="submit" disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Enregistrer les disponibilités
-          </Button>
+        <div>
+          <Label htmlFor="annee">Année</Label>
+          <Input
+            type="text"
+            id="annee"
+            name="annee"
+            value={formData.annee}
+            onChange={handleInputChange}
+          />
         </div>
-      </form>
-    </Form>
+        
+        <div>
+          <Label>Date</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"outline"}
+                className={cn(
+                  "w-[240px] justify-start text-left font-normal",
+                  !date && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {date ? format(date, "PPP") : <span>Pick a date</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="center" side="bottom">
+              <Calendar
+                mode="single"
+                selected={date}
+                onSelect={setDate}
+                disabled={(date) =>
+                  date > new Date()
+                }
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 gap-2">
+        {weekDates.map((day, index) => (
+          <Card key={index} className="p-4">
+            <div className="flex flex-col items-center">
+              <Label className="text-sm">{day.jourNom} {day.numero}</Label>
+              <Checkbox
+                id={`jour-${day.jour}`}
+                checked={formData.jours[index].disponible}
+                onCheckedChange={() => handleCheckboxChange(index)}
+              />
+            </div>
+            
+            {formData.jours[index].disponible && (
+              <div className="mt-4">
+                {formData.jours[index].creneaux?.map((creneau, creneauIndex) => (
+                  <div key={creneauIndex} className="flex gap-2 items-center mb-2">
+                    <Input
+                      type="text"
+                      placeholder="Créneau"
+                      value={creneau}
+                      onChange={(e) => handleCreneauChange(index, creneauIndex, e.target.value)}
+                    />
+                    <Button 
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      onClick={() => removeCreneau(index, creneauIndex)}
+                    >
+                      <span className="sr-only">Supprimer</span>
+                      X
+                    </Button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={() => addCreneau(index)}>
+                  Ajouter un créneau
+                </Button>
+              </div>
+            )}
+          </Card>
+        ))}
+      </div>
+
+      <div>
+        <Label htmlFor="commentaire">Commentaire</Label>
+        <Textarea
+          id="commentaire"
+          name="commentaire"
+          value={formData.commentaire}
+          onChange={handleInputChange}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" onClick={onClose}>
+          Annuler
+        </Button>
+        <Button type="submit">Enregistrer</Button>
+      </div>
+    </form>
   );
 };
 

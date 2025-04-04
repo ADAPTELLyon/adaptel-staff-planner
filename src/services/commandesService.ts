@@ -44,6 +44,13 @@ export const getCurrentWeekNumber = () => {
   return Math.ceil(diff / oneWeek);
 };
 
+// Get week number from a date
+export const getWeekNumber = (date: Date) => {
+  const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+  const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000;
+  return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+};
+
 // Get the current year
 export const getCurrentYear = () => {
   return new Date().getFullYear();

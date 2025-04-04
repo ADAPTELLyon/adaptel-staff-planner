@@ -1,52 +1,22 @@
-
 import { useState, useEffect } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Edit, Plus, Search, Loader2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Edit, Trash2, Plus } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { z } from "zod";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { SECTEURS } from "@/services/commandesService";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Client {
   id: string;
+  created_at: string;
   nom: string;
   adresse: string | null;
   ville: string | null;
@@ -60,451 +30,360 @@ interface Client {
   contact_telephone: string | null;
 }
 
-// Form schema validation
-const formSchema = z.object({
-  id: z.string().optional(),
-  nom: z.string().min(1, { message: "Le nom est requis" }),
-  adresse: z.string().optional(),
-  ville: z.string().optional(),
-  telephone: z.string().optional(),
-  email: z.string().email({ message: "Email invalide" }).optional().or(z.literal("")),
-  secteur: z.string().optional(),
-  groupe_client: z.string().optional(),
-  contact_nom: z.string().optional(),
-  contact_prenom: z.string().optional(),
-  contact_email: z.string().email({ message: "Email de contact invalide" }).optional().or(z.literal("")),
-  contact_telephone: z.string().optional(),
-});
-
-type FormValues = z.infer<typeof formSchema>;
-
 const Clients = () => {
   const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [recherche, setRecherche] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      id: "",
-      nom: "",
-      adresse: "",
-      ville: "",
-      telephone: "",
-      email: "",
-      secteur: "",
-      groupe_client: "",
-      contact_nom: "",
-      contact_prenom: "",
-      contact_email: "",
-      contact_telephone: "",
-    },
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    id: '',
+    nom: '',
+    adresse: '',
+    ville: '',
+    telephone: '',
+    email: '',
+    secteur: '',
+    groupe_client: '',
+    contact_nom: '',
+    contact_prenom: '',
+    contact_email: '',
+    contact_telephone: ''
   });
+  
+  const initialFormState = {
+    id: '',
+    nom: '',
+    adresse: '',
+    ville: '',
+    telephone: '',
+    email: '',
+    secteur: '',
+    groupe_client: '',
+    contact_nom: '',
+    contact_prenom: '',
+    contact_email: '',
+    contact_telephone: ''
+  };
 
   // Fetch clients from Supabase
   const fetchClients = async () => {
-    setLoading(true);
     try {
       const { data, error } = await supabase
-        .from("clients")
-        .select("*");
-      
+        .from('clients')
+        .select('*')
+        .order('created_at', { ascending: false });
+
       if (error) {
         throw error;
       }
-      
       setClients(data || []);
     } catch (error) {
-      console.error("Erreur lors de la récupération des clients:", error);
-      toast.error("Erreur lors du chargement des clients");
-    } finally {
-      setLoading(false);
+      console.error('Error fetching clients:', error);
     }
-  };
-
-  // Create or update a client
-  const saveClient = async (values: FormValues) => {
-    try {
-      if (isEditing && values.id) {
-        // Update existing client
-        const { id, ...clientData } = values;
-        const { error } = await supabase
-          .from("clients")
-          .update(clientData)
-          .eq("id", id);
-        
-        if (error) {
-          throw error;
-        }
-        
-        toast.success("Client modifié avec succès");
-      } else {
-        // Create new client
-        const { id, ...clientData } = values;
-        const { error } = await supabase
-          .from("clients")
-          .insert([clientData]);
-        
-        if (error) {
-          throw error;
-        }
-        
-        toast.success("Client créé avec succès");
-      }
-      
-      form.reset();
-      setDialogOpen(false);
-      setIsEditing(false);
-      fetchClients(); // Refresh the client list
-    } catch (error) {
-      console.error("Erreur lors de la sauvegarde du client:", error);
-      toast.error(`Erreur lors de la ${isEditing ? 'modification' : 'création'} du client`);
-    }
-  };
-
-  // Open edit form with prefilled data
-  const handleEdit = (client: Client) => {
-    setIsEditing(true);
-    form.reset({
-      id: client.id,
-      nom: client.nom,
-      adresse: client.adresse || "",
-      ville: client.ville || "",
-      telephone: client.telephone || "",
-      email: client.email || "",
-      secteur: client.secteur || "",
-      groupe_client: client.groupe_client || "",
-      contact_nom: client.contact_nom || "",
-      contact_prenom: client.contact_prenom || "",
-      contact_email: client.contact_email || "",
-      contact_telephone: client.contact_telephone || "",
-    });
-    setDialogOpen(true);
-  };
-
-  // Handle new client button
-  const handleNewClient = () => {
-    setIsEditing(false);
-    form.reset({
-      id: "",
-      nom: "",
-      adresse: "",
-      ville: "",
-      telephone: "",
-      email: "",
-      secteur: "",
-      groupe_client: "",
-      contact_nom: "",
-      contact_prenom: "",
-      contact_email: "",
-      contact_telephone: "",
-    });
-    setDialogOpen(true);
   };
 
   useEffect(() => {
     fetchClients();
   }, []);
 
-  const clientsFiltres = clients.filter(client => 
-    client.nom?.toLowerCase().includes(recherche.toLowerCase()) || 
-    client.ville?.toLowerCase().includes(recherche.toLowerCase()) ||
-    client.secteur?.toLowerCase().includes(recherche.toLowerCase()) ||
-    client.email?.toLowerCase().includes(recherche.toLowerCase())
-  );
+  // Handle form input changes
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prevData => ({
+      ...prevData,
+      [name]: value
+    }));
+  };
+  
+  // Handle form submit
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      setIsSubmitting(true);
+      
+      // Validation basique
+      if (!formData.nom) {
+        toast.error("Le nom du client est requis");
+        return;
+      }
+      
+      if (isEditing) {
+        const { error } = await supabase
+          .from('clients')
+          .update({
+            nom: formData.nom,
+            adresse: formData.adresse,
+            ville: formData.ville,
+            telephone: formData.telephone,
+            email: formData.email,
+            secteur: formData.secteur,
+            groupe_client: formData.groupe_client,
+            contact_nom: formData.contact_nom,
+            contact_prenom: formData.contact_prenom,
+            contact_email: formData.contact_email,
+            contact_telephone: formData.contact_telephone
+          })
+          .eq('id', formData.id);
+        
+        if (error) throw error;
+        
+        toast.success("Client mis à jour");
+      } else {
+        // CORRECTION: Remplacer l'array par un objet unique
+        const { error } = await supabase
+          .from('clients')
+          .insert({
+            nom: formData.nom,
+            adresse: formData.adresse,
+            ville: formData.ville,
+            telephone: formData.telephone,
+            email: formData.email,
+            secteur: formData.secteur,
+            groupe_client: formData.groupe_client,
+            contact_nom: formData.contact_nom,
+            contact_prenom: formData.contact_prenom,
+            contact_email: formData.contact_email,
+            contact_telephone: formData.contact_telephone
+          });
+        
+        if (error) throw error;
+        
+        toast.success("Client ajouté");
+      }
+      
+      // Réinitialisation du formulaire et rechargement des données
+      setFormData(initialFormState);
+      setIsEditing(false);
+      setDialogOpen(false);
+      fetchClients();
+    } catch (error) {
+      console.error('Error saving client:', error);
+      toast.error("Erreur lors de l'enregistrement");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-  const onSubmit = (values: FormValues) => {
-    saveClient(values);
+  // Handle edit client
+  const handleEditClient = (client: Client) => {
+    setFormData({ ...client });
+    setIsEditing(true);
+    setDialogOpen(true);
+  };
+
+  // Handle delete client
+  const handleDeleteClient = async (id: string) => {
+    if (window.confirm("Êtes-vous sûr de vouloir supprimer ce client ?")) {
+      try {
+        const { error } = await supabase
+          .from('clients')
+          .delete()
+          .eq('id', id);
+
+        if (error) {
+          throw error;
+        }
+
+        // Refresh clients list
+        fetchClients();
+        toast.success("Client supprimé avec succès");
+      } catch (error) {
+        console.error('Error deleting client:', error);
+        toast.error("Erreur lors de la suppression du client");
+      }
+    }
   };
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
+    <div className="container mx-auto p-4">
+      <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Clients</h1>
-        
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={handleNewClient}>
-              <Plus className="mr-2 h-4 w-4" />
-              Nouveau client
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[550px]">
-            <DialogHeader>
-              <DialogTitle>{isEditing ? 'Modifier le client' : 'Créer un nouveau client'}</DialogTitle>
-              <DialogDescription>
-                {isEditing 
-                  ? 'Modifiez les informations du client ci-dessous.' 
-                  : 'Remplissez le formulaire ci-dessous pour ajouter un nouveau client.'}
-              </DialogDescription>
-            </DialogHeader>
-            
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                {isEditing && (
-                  <FormField
-                    control={form.control}
-                    name="id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>ID</FormLabel>
-                        <FormControl>
-                          <Input placeholder="ID" {...field} disabled className="bg-gray-100" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="nom"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nom*</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Nom du client" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="secteur"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Secteur</FormLabel>
-                        <Select 
-                          onValueChange={field.onChange} 
-                          defaultValue={field.value}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Sélectionner un secteur" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {SECTEURS.map((secteur) => (
-                              <SelectItem key={secteur} value={secteur}>
-                                {secteur}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="adresse"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Adresse</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Adresse" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="ville"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ville</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Ville" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="telephone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Téléphone</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Téléphone" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Email" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <h3 className="font-medium text-sm pt-2">Contact principal</h3>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="contact_prenom"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Prénom</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Prénom du contact" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="contact_nom"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nom</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Nom du contact" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="contact_telephone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Téléphone contact</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Téléphone du contact" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="contact_email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email contact</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Email du contact" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <DialogFooter className="pt-4">
-                  <Button type="submit" disabled={form.formState.isSubmitting}>
-                    {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {isEditing ? 'Modifier le client' : 'Créer le client'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={() => {
+          setFormData(initialFormState);
+          setIsEditing(false);
+          setDialogOpen(true);
+        }}>
+          <Plus className="mr-2 h-4 w-4" />
+          Ajouter un client
+        </Button>
       </div>
-      
-      <Card className="mb-6">
-        <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Rechercher un client..."
-              className="pl-10"
-              value={recherche}
-              onChange={(e) => setRecherche(e.target.value)}
-            />
-          </div>
-        </CardContent>
-      </Card>
-      
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+
+      <Card className="rounded-lg shadow-sm overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Nom</TableHead>
+              <TableHead>Adresse</TableHead>
               <TableHead>Ville</TableHead>
               <TableHead>Téléphone</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Secteur</TableHead>
-              <TableHead>Contact</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center">
-                  <div className="flex justify-center items-center">
-                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                    <span>Chargement des clients...</span>
-                  </div>
+            {clients.map((client) => (
+              <TableRow key={client.id}>
+                <TableCell>{client.nom}</TableCell>
+                <TableCell>{client.adresse}</TableCell>
+                <TableCell>{client.ville}</TableCell>
+                <TableCell>{client.telephone}</TableCell>
+                <TableCell>{client.email}</TableCell>
+                <TableCell>{client.secteur}</TableCell>
+                <TableCell>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => handleEditClient(client)}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Modifier
+                  </Button>
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => handleDeleteClient(client.id)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Supprimer
+                  </Button>
                 </TableCell>
               </TableRow>
-            ) : clientsFiltres.length > 0 ? (
-              clientsFiltres.map((client) => (
-                <TableRow key={client.id}>
-                  <TableCell className="font-medium">{client.nom}</TableCell>
-                  <TableCell>{client.ville || "-"}</TableCell>
-                  <TableCell>{client.telephone || "-"}</TableCell>
-                  <TableCell>{client.email || "-"}</TableCell>
-                  <TableCell>{client.secteur ? <Badge variant="outline">{client.secteur}</Badge> : "-"}</TableCell>
-                  <TableCell>
-                    {client.contact_prenom || client.contact_nom ? 
-                      `${client.contact_prenom || ""} ${client.contact_nom || ""}`.trim() : 
-                      "-"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(client)}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center">
-                  Aucun client trouvé
-                </TableCell>
-              </TableRow>
-            )}
+            ))}
           </TableBody>
         </Table>
-      </div>
+      </Card>
+
+      {/* Client Form Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{isEditing ? "Modifier Client" : "Ajouter Client"}</DialogTitle>
+            <DialogDescription>
+              {isEditing ? "Modifiez les informations du client." : "Ajoutez un nouveau client à la base de données."}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="nom">Nom</Label>
+              <Input 
+                type="text" 
+                id="nom" 
+                name="nom" 
+                value={formData.nom} 
+                onChange={handleInputChange} 
+                required 
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="adresse">Adresse</Label>
+              <Input 
+                type="text" 
+                id="adresse" 
+                name="adresse" 
+                value={formData.adresse || ''} 
+                onChange={handleInputChange} 
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ville">Ville</Label>
+              <Input 
+                type="text" 
+                id="ville" 
+                name="ville" 
+                value={formData.ville || ''} 
+                onChange={handleInputChange} 
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="telephone">Téléphone</Label>
+              <Input 
+                type="tel" 
+                id="telephone" 
+                name="telephone" 
+                value={formData.telephone || ''} 
+                onChange={handleInputChange} 
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email</Label>
+              <Input 
+                type="email" 
+                id="email" 
+                name="email" 
+                value={formData.email || ''} 
+                onChange={handleInputChange} 
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="secteur">Secteur</Label>
+              <Input 
+                type="text" 
+                id="secteur" 
+                name="secteur" 
+                value={formData.secteur || ''} 
+                onChange={handleInputChange} 
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="groupe_client">Groupe Client</Label>
+              <Input 
+                type="text" 
+                id="groupe_client" 
+                name="groupe_client" 
+                value={formData.groupe_client || ''} 
+                onChange={handleInputChange} 
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="contact_nom">Contact Nom</Label>
+              <Input 
+                type="text" 
+                id="contact_nom" 
+                name="contact_nom" 
+                value={formData.contact_nom || ''} 
+                onChange={handleInputChange} 
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="contact_prenom">Contact Prénom</Label>
+              <Input 
+                type="text" 
+                id="contact_prenom" 
+                name="contact_prenom" 
+                value={formData.contact_prenom || ''} 
+                onChange={handleInputChange} 
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="contact_email">Contact Email</Label>
+              <Input 
+                type="email" 
+                id="contact_email" 
+                name="contact_email" 
+                value={formData.contact_email || ''} 
+                onChange={handleInputChange} 
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="contact_telephone">Contact Téléphone</Label>
+              <Input 
+                type="tel" 
+                id="contact_telephone" 
+                name="contact_telephone" 
+                value={formData.contact_telephone || ''} 
+                onChange={handleInputChange} 
+              />
+            </div>
+            <div className="flex justify-end">
+              <Button type="submit" disabled={isSubmitting}>
+                {isEditing ? "Mettre à jour" : "Enregistrer"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

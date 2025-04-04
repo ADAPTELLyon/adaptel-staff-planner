@@ -7,6 +7,23 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Plus, Search } from "lucide-react";
 import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import DisponibiliteForm from "@/components/planning/DisponibiliteForm";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { SECTEURS, generateWeekDates, getCurrentWeekNumber, getCurrentYear } from "@/services/commandesService";
 
 interface Indicateur {
   nom: string;
@@ -28,12 +45,17 @@ interface PlanningEntry {
 }
 
 const Planning = () => {
-  const [semaine, setSemaine] = useState("semaine-en-cours");
+  const [semaine, setSemaine] = useState(getCurrentWeekNumber().toString());
+  const [annee] = useState(getCurrentYear());
   const [secteur, setSecteur] = useState("tous");
+  const [candidatFilter, setCandidatFilter] = useState("tous");
   const [recherche, setRecherche] = useState("");
   const [semaineEnCours, setSemaineEnCours] = useState(true);
   const [disponiblesUniquement, setDisponiblesUniquement] = useState(false);
   const [toutAfficher, setToutAfficher] = useState(false);
+  const [dispoFormDialogOpen, setDispoFormDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [candidats, setCandidats] = useState<{id: string, nom: string, prenom: string}[]>([]);
   
   // Données factices pour les indicateurs
   const [indicateurs, setIndicateurs] = useState<Indicateur[]>([
@@ -43,63 +65,84 @@ const Planning = () => {
     { nom: "Non renseignés", valeur: 3, couleur: "#D9D9D9" },
   ]);
 
-  // Jours de la semaine
-  const jourSemaineActuelle = new Date();
-  const premierJourSemaine = new Date(jourSemaineActuelle);
-  premierJourSemaine.setDate(jourSemaineActuelle.getDate() - jourSemaineActuelle.getDay() + 1);
+  // Week dates
+  const [weekDates, setWeekDates] = useState<any[]>([]);
   
-  const jours = Array.from({ length: 7 }).map((_, i) => {
-    const date = new Date(premierJourSemaine);
-    date.setDate(premierJourSemaine.getDate() + i);
-    
-    const jour = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"][date.getDay()];
-    const numero = date.getDate();
-    const mois = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"][date.getMonth()];
-    
-    return `${jour} ${numero} ${mois}`;
-  });
-  
-  const numeroSemaine = (() => {
-    const d = new Date(premierJourSemaine);
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
-    const week1 = new Date(d.getFullYear(), 0, 4);
-    return 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
-  })();
-  
-  const [planningData, setPlanningData] = useState<PlanningEntry[]>([
-    {
-      id: "1",
-      candidatNom: "Martin Dupont",
-      secteur: "Cuisine",
-      jours: [
-        { statut: "Non dispo", couleurFond: "#A6A6A6", couleurTexte: "#FFFFFF" },
-        { statut: "Dispo", couleurFond: "#B8E0F2", couleurTexte: "#000000", creneaux: ["Matin", "Soir"] },
-        { statut: "Mission validée", couleurFond: "#C1EAC5", couleurTexte: "#000000", creneaux: ["Matin"], client: "Restaurant Le Gourmet" },
-        { statut: "Dispo", couleurFond: "#B8E0F2", couleurTexte: "#000000", creneaux: ["Matin", "Soir"] },
-        { statut: "Dispo", couleurFond: "#B8E0F2", couleurTexte: "#000000", creneaux: ["Matin", "Soir"] },
-        { statut: "Non dispo", couleurFond: "#A6A6A6", couleurTexte: "#FFFFFF" },
-        { statut: "Non dispo", couleurFond: "#A6A6A6", couleurTexte: "#FFFFFF" }
-      ]
-    },
-    {
-      id: "2",
-      candidatNom: "Sophie Laurent",
-      secteur: "Réception",
-      jours: [
-        { statut: "Mission validée", couleurFond: "#C1EAC5", couleurTexte: "#000000", creneaux: ["Matin"], client: "Hôtel Bellevue" },
-        { statut: "Mission validée", couleurFond: "#C1EAC5", couleurTexte: "#000000", creneaux: ["Matin"], client: "Hôtel Bellevue" },
-        { statut: "Mission validée", couleurFond: "#C1EAC5", couleurTexte: "#000000", creneaux: ["Matin"], client: "Hôtel Bellevue" },
-        { statut: "Mission validée", couleurFond: "#C1EAC5", couleurTexte: "#000000", creneaux: ["Matin"], client: "Hôtel Bellevue" },
-        { statut: "Mission validée", couleurFond: "#C1EAC5", couleurTexte: "#000000", creneaux: ["Matin"], client: "Hôtel Bellevue" },
-        { statut: "Dispo", couleurFond: "#B8E0F2", couleurTexte: "#000000", creneaux: ["Matin", "Soir"] },
-        { statut: "Dispo", couleurFond: "#B8E0F2", couleurTexte: "#000000", creneaux: ["Matin", "Soir"] }
-      ]
-    }
-  ]);
+  // For data
+  const [planningData, setPlanningData] = useState<PlanningEntry[]>([]);
 
-  // Pour la barre de progression
+  // For the barre de progression
   const [progression, setProgression] = useState(0);
+  
+  // Fetch candidats
+  const fetchCandidats = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('candidats')
+        .select('id, nom, prenom')
+        .eq('actif', true);
+      
+      if (error) throw error;
+      setCandidats(data || []);
+    } catch (error) {
+      console.error('Error fetching candidats:', error);
+      toast.error("Erreur lors du chargement des candidats");
+    }
+  };
+
+  // For now, load sample data (this would be connected to Supabase in a real implementation)
+  const loadPlanningData = async () => {
+    setLoading(true);
+    try {
+      // Generate week dates
+      const weekNum = parseInt(semaine);
+      const dates = generateWeekDates(weekNum, annee);
+      setWeekDates(dates);
+      
+      // In a real implementation, fetch planning data from Supabase
+      // For now, using sample data
+      setPlanningData([
+        {
+          id: "1",
+          candidatNom: "Martin Dupont",
+          secteur: "Cuisine",
+          jours: [
+            { statut: "Non dispo", couleurFond: "#A6A6A6", couleurTexte: "#FFFFFF" },
+            { statut: "Dispo", couleurFond: "#B8E0F2", couleurTexte: "#000000", creneaux: ["Matin", "Soir"] },
+            { statut: "Mission validée", couleurFond: "#C1EAC5", couleurTexte: "#000000", creneaux: ["Matin"], client: "Restaurant Le Gourmet" },
+            { statut: "Dispo", couleurFond: "#B8E0F2", couleurTexte: "#000000", creneaux: ["Matin", "Soir"] },
+            { statut: "Dispo", couleurFond: "#B8E0F2", couleurTexte: "#000000", creneaux: ["Matin", "Soir"] },
+            { statut: "Non dispo", couleurFond: "#A6A6A6", couleurTexte: "#FFFFFF" },
+            { statut: "Non dispo", couleurFond: "#A6A6A6", couleurTexte: "#FFFFFF" }
+          ]
+        },
+        {
+          id: "2",
+          candidatNom: "Sophie Laurent",
+          secteur: "Réception",
+          jours: [
+            { statut: "Mission validée", couleurFond: "#C1EAC5", couleurTexte: "#000000", creneaux: ["Matin"], client: "Hôtel Bellevue" },
+            { statut: "Mission validée", couleurFond: "#C1EAC5", couleurTexte: "#000000", creneaux: ["Matin"], client: "Hôtel Bellevue" },
+            { statut: "Mission validée", couleurFond: "#C1EAC5", couleurTexte: "#000000", creneaux: ["Matin"], client: "Hôtel Bellevue" },
+            { statut: "Mission validée", couleurFond: "#C1EAC5", couleurTexte: "#000000", creneaux: ["Matin"], client: "Hôtel Bellevue" },
+            { statut: "Mission validée", couleurFond: "#C1EAC5", couleurTexte: "#000000", creneaux: ["Matin"], client: "Hôtel Bellevue" },
+            { statut: "Dispo", couleurFond: "#B8E0F2", couleurTexte: "#000000", creneaux: ["Matin", "Soir"] },
+            { statut: "Dispo", couleurFond: "#B8E0F2", couleurTexte: "#000000", creneaux: ["Matin", "Soir"] }
+          ]
+        }
+      ]);
+    } catch (error) {
+      console.error('Error loading planning data:', error);
+      toast.error("Erreur lors du chargement des données");
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  useEffect(() => {
+    loadPlanningData();
+    fetchCandidats();
+  }, [semaine, secteur]);
   
   useEffect(() => {
     const planifiesCount = indicateurs.find(i => i.nom === "Planifiés")?.valeur || 0;
@@ -111,6 +154,23 @@ const Planning = () => {
       setProgression(0);
     }
   }, [indicateurs]);
+  
+  // Apply filters
+  const filteredPlanningData = planningData.filter(entry => {
+    // Filter by secteur
+    if (secteur !== "tous" && entry.secteur !== secteur) return false;
+    
+    // Filter by candidat
+    if (candidatFilter !== "tous" && entry.id !== candidatFilter) return false;
+    
+    // Filter by search term
+    if (recherche && !entry.candidatNom.toLowerCase().includes(recherche.toLowerCase())) return false;
+    
+    // Filter by disponibles only
+    if (disponiblesUniquement && !entry.jours.some(j => j.statut === "Dispo")) return false;
+    
+    return true;
+  });
 
   return (
     <div className="container mx-auto p-4">
@@ -145,32 +205,62 @@ const Planning = () => {
           <div className="flex flex-wrap gap-4">
             <div className="w-40">
               <Label htmlFor="semaine-select" className="mb-1 block text-xs">Semaine</Label>
-              <select 
-                id="semaine-select"
-                className="w-full border rounded px-3 py-2 text-sm"
+              <Select 
                 value={semaine}
-                onChange={(e) => setSemaine(e.target.value)}
+                onValueChange={setSemaine}
               >
-                <option value="semaine-en-cours">Semaine en cours</option>
-                <option value="semaine-prochaine">Semaine prochaine</option>
-              </select>
+                <SelectTrigger id="semaine-select">
+                  <SelectValue placeholder="Sélectionner une semaine" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 5 }).map((_, i) => {
+                    const weekNum = getCurrentWeekNumber() + i - 2;
+                    return (
+                      <SelectItem key={weekNum} value={weekNum.toString()}>
+                        Semaine {weekNum}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
             </div>
             
             <div className="w-40">
               <Label htmlFor="secteur-select" className="mb-1 block text-xs">Secteur</Label>
-              <select 
-                id="secteur-select"
-                className="w-full border rounded px-3 py-2 text-sm"
+              <Select 
                 value={secteur}
-                onChange={(e) => setSecteur(e.target.value)}
+                onValueChange={setSecteur}
               >
-                <option value="tous">Tous les secteurs</option>
-                <option value="cuisine">Cuisine</option>
-                <option value="salle">Salle</option>
-                <option value="plonge">Plonge</option>
-                <option value="reception">Réception</option>
-                <option value="etages">Étages</option>
-              </select>
+                <SelectTrigger id="secteur-select">
+                  <SelectValue placeholder="Tous les secteurs" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tous">Tous les secteurs</SelectItem>
+                  {SECTEURS.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="w-40">
+              <Label htmlFor="candidat-select" className="mb-1 block text-xs">Candidat</Label>
+              <Select 
+                value={candidatFilter}
+                onValueChange={setCandidatFilter}
+              >
+                <SelectTrigger id="candidat-select">
+                  <SelectValue placeholder="Tous les candidats" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tous">Tous les candidats</SelectItem>
+                  {candidats.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {`${c.prenom} ${c.nom}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           
@@ -218,7 +308,11 @@ const Planning = () => {
           </div>
           
           <div className="flex flex-wrap gap-2">
-            <Button>Saisie disponibilités</Button>
+            <Button 
+              onClick={() => setDispoFormDialogOpen(true)}
+            >
+              Saisie disponibilités
+            </Button>
             <Button variant="outline">Imprimer planning</Button>
           </div>
         </div>
@@ -227,52 +321,75 @@ const Planning = () => {
       {/* Tableau de planning */}
       <div className="bg-white p-4 rounded-lg shadow-sm overflow-x-auto">
         <div className="mb-2 text-sm font-medium">
-          Semaine {numeroSemaine} – {new Date(premierJourSemaine).getDate()} au {new Date(premierJourSemaine.getTime() + 6 * 24 * 60 * 60 * 1000).getDate()} {new Date(premierJourSemaine).toLocaleDateString('fr-FR', { month: 'long' })}
+          Semaine {semaine} – {weekDates[0]?.numero} au {weekDates[6]?.numero} {weekDates[0]?.mois}
         </div>
         <table className="min-w-full border-collapse">
           <thead>
             <tr className="bg-gray-100">
               <th className="py-2 px-3 text-left font-medium text-sm text-gray-600 border w-1/8">Candidat / Secteur</th>
-              {jours.map((jour) => (
-                <th key={jour} className="py-2 px-3 text-left font-medium text-sm text-gray-600 border w-1/8">
-                  {jour}
+              {weekDates.map((jour) => (
+                <th key={jour.jour} className="py-2 px-3 text-left font-medium text-sm text-gray-600 border w-1/8">
+                  {jour.jourNom} {jour.numero} {jour.mois}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {planningData.map((entry) => (
-              <tr key={entry.id}>
-                <td className="border p-2">
-                  <div className="flex flex-col">
-                    <div className="font-medium">{entry.candidatNom}</div>
-                    <div className="text-sm px-2 py-0.5 bg-gray-100 rounded-full inline-block w-fit">{entry.secteur}</div>
-                  </div>
-                </td>
-                {entry.jours.map((jour, index) => (
-                  <td
-                    key={index}
-                    className="border p-2 relative"
-                  >
-                    {jour.statut && (
-                      <div className="rounded p-2" style={{ backgroundColor: jour.couleurFond + '40' }}>
-                        <div className="font-medium text-sm">{jour.statut}</div>
-                        {jour.client && <div className="text-xs">{jour.client}</div>}
-                        {jour.creneaux?.map((creneau, idx) => (
-                          <div key={idx} className="text-xs">{creneau}</div>
-                        ))}
-                        <button className="absolute top-1 right-1 text-gray-600 hover:text-gray-900 bg-white rounded-full p-0.5 shadow-sm">
-                          <Plus size={16} />
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                ))}
+            {loading ? (
+              <tr>
+                <td colSpan={8} className="p-3 text-center">Chargement du planning...</td>
               </tr>
-            ))}
+            ) : filteredPlanningData.length > 0 ? (
+              filteredPlanningData.map((entry) => (
+                <tr key={entry.id}>
+                  <td className="border p-2">
+                    <div className="flex flex-col">
+                      <div className="font-medium">{entry.candidatNom}</div>
+                      <div className="text-sm px-2 py-0.5 bg-gray-100 rounded-full inline-block w-fit">{entry.secteur}</div>
+                    </div>
+                  </td>
+                  {entry.jours.map((jour, index) => (
+                    <td
+                      key={index}
+                      className="border p-2 relative"
+                    >
+                      {jour.statut && (
+                        <div className="rounded p-2" style={{ backgroundColor: jour.couleurFond + '40' }}>
+                          <div className="font-medium text-sm">{jour.statut}</div>
+                          {jour.client && <div className="text-xs">{jour.client}</div>}
+                          {jour.creneaux?.map((creneau, idx) => (
+                            <div key={idx} className="text-xs">{creneau}</div>
+                          ))}
+                          <button className="absolute top-1 right-1 text-gray-600 hover:text-gray-900 bg-white rounded-full p-0.5 shadow-sm">
+                            <Plus size={16} />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={8} className="p-3 text-center">Aucune donnée disponible</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
+
+      {/* Disponibilité Form Dialog */}
+      <Dialog open={dispoFormDialogOpen} onOpenChange={setDispoFormDialogOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Saisie des disponibilités</DialogTitle>
+          </DialogHeader>
+          <DisponibiliteForm onClose={() => {
+            setDispoFormDialogOpen(false);
+            loadPlanningData(); // Refresh data after updating disponibilities
+          }} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

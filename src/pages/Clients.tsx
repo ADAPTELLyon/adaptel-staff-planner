@@ -36,6 +36,14 @@ import {
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { SECTEURS } from "@/services/commandesService";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Client {
   id: string;
@@ -54,6 +62,7 @@ interface Client {
 
 // Form schema validation
 const formSchema = z.object({
+  id: z.string().optional(),
   nom: z.string().min(1, { message: "Le nom est requis" }),
   adresse: z.string().optional(),
   ville: z.string().optional(),
@@ -74,10 +83,12 @@ const Clients = () => {
   const [loading, setLoading] = useState(true);
   const [recherche, setRecherche] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      id: "",
       nom: "",
       adresse: "",
       ville: "",
@@ -113,25 +124,84 @@ const Clients = () => {
     }
   };
 
-  // Create a new client
-  const createClient = async (values: FormValues) => {
+  // Create or update a client
+  const saveClient = async (values: FormValues) => {
     try {
-      const { error } = await supabase
-        .from("clients")
-        .insert([values]);
-      
-      if (error) {
-        throw error;
+      if (isEditing && values.id) {
+        // Update existing client
+        const { id, ...clientData } = values;
+        const { error } = await supabase
+          .from("clients")
+          .update(clientData)
+          .eq("id", id);
+        
+        if (error) {
+          throw error;
+        }
+        
+        toast.success("Client modifié avec succès");
+      } else {
+        // Create new client
+        const { id, ...clientData } = values;
+        const { error } = await supabase
+          .from("clients")
+          .insert([clientData]);
+        
+        if (error) {
+          throw error;
+        }
+        
+        toast.success("Client créé avec succès");
       }
       
-      toast.success("Client créé avec succès");
       form.reset();
       setDialogOpen(false);
+      setIsEditing(false);
       fetchClients(); // Refresh the client list
     } catch (error) {
-      console.error("Erreur lors de la création du client:", error);
-      toast.error("Erreur lors de la création du client");
+      console.error("Erreur lors de la sauvegarde du client:", error);
+      toast.error(`Erreur lors de la ${isEditing ? 'modification' : 'création'} du client`);
     }
+  };
+
+  // Open edit form with prefilled data
+  const handleEdit = (client: Client) => {
+    setIsEditing(true);
+    form.reset({
+      id: client.id,
+      nom: client.nom,
+      adresse: client.adresse || "",
+      ville: client.ville || "",
+      telephone: client.telephone || "",
+      email: client.email || "",
+      secteur: client.secteur || "",
+      groupe_client: client.groupe_client || "",
+      contact_nom: client.contact_nom || "",
+      contact_prenom: client.contact_prenom || "",
+      contact_email: client.contact_email || "",
+      contact_telephone: client.contact_telephone || "",
+    });
+    setDialogOpen(true);
+  };
+
+  // Handle new client button
+  const handleNewClient = () => {
+    setIsEditing(false);
+    form.reset({
+      id: "",
+      nom: "",
+      adresse: "",
+      ville: "",
+      telephone: "",
+      email: "",
+      secteur: "",
+      groupe_client: "",
+      contact_nom: "",
+      contact_prenom: "",
+      contact_email: "",
+      contact_telephone: "",
+    });
+    setDialogOpen(true);
   };
 
   useEffect(() => {
@@ -146,7 +216,7 @@ const Clients = () => {
   );
 
   const onSubmit = (values: FormValues) => {
-    createClient(values);
+    saveClient(values);
   };
 
   return (
@@ -156,21 +226,39 @@ const Clients = () => {
         
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={handleNewClient}>
               <Plus className="mr-2 h-4 w-4" />
               Nouveau client
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[550px]">
             <DialogHeader>
-              <DialogTitle>Créer un nouveau client</DialogTitle>
+              <DialogTitle>{isEditing ? 'Modifier le client' : 'Créer un nouveau client'}</DialogTitle>
               <DialogDescription>
-                Remplissez le formulaire ci-dessous pour ajouter un nouveau client.
+                {isEditing 
+                  ? 'Modifiez les informations du client ci-dessous.' 
+                  : 'Remplissez le formulaire ci-dessous pour ajouter un nouveau client.'}
               </DialogDescription>
             </DialogHeader>
             
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                {isEditing && (
+                  <FormField
+                    control={form.control}
+                    name="id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ID</FormLabel>
+                        <FormControl>
+                          <Input placeholder="ID" {...field} disabled className="bg-gray-100" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -192,9 +280,24 @@ const Clients = () => {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Secteur</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Secteur d'activité" {...field} />
-                        </FormControl>
+                        <Select 
+                          onValueChange={field.onChange} 
+                          defaultValue={field.value}
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Sélectionner un secteur" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {SECTEURS.map((secteur) => (
+                              <SelectItem key={secteur} value={secteur}>
+                                {secteur}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -326,7 +429,7 @@ const Clients = () => {
                 <DialogFooter className="pt-4">
                   <Button type="submit" disabled={form.formState.isSubmitting}>
                     {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Créer le client
+                    {isEditing ? 'Modifier le client' : 'Créer le client'}
                   </Button>
                 </DialogFooter>
               </form>
@@ -386,7 +489,7 @@ const Clients = () => {
                       "-"}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon">
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(client)}>
                       <Edit className="h-4 w-4" />
                     </Button>
                   </TableCell>

@@ -1,5 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
+import { Database } from "@/integrations/supabase/types";
 
 export interface Commande {
   id: string;
@@ -202,3 +203,33 @@ export const getStatusColors = (statut: string) => {
       return { couleur_fond: "#ffffff", couleur_texte: "#000000" };
   }
 }
+
+// List available sectors
+export const SECTEURS = ["Cuisine", "Salle", "Plonge", "Réception", "Étages"];
+
+// Generate week options for select
+export const generateWeekOptions = (currentYear: number) => {
+  const options = [];
+  const now = new Date();
+  const currentWeek = getCurrentWeekNumber();
+  
+  // Generate options for 5 weeks before and 10 weeks after current week
+  for (let i = -5; i <= 10; i++) {
+    const weekNum = currentWeek + i;
+    if (weekNum > 0 && weekNum <= 52) {
+      const weekDates = generateWeekDates(weekNum, currentYear);
+      const firstDate = weekDates[0].date;
+      const lastDate = weekDates[6].date;
+      
+      const formattedFirstDate = `${firstDate.getDate()} ${["jan", "fév", "mar", "avr", "mai", "juin", "juil", "août", "sep", "oct", "nov", "déc"][firstDate.getMonth()]}`;
+      const formattedLastDate = `${lastDate.getDate()} ${["jan", "fév", "mar", "avr", "mai", "juin", "juil", "août", "sep", "oct", "nov", "déc"][lastDate.getMonth()]}`;
+      
+      options.push({
+        value: weekNum.toString(),
+        label: `Semaine ${weekNum} - du ${formattedFirstDate} au ${formattedLastDate}`
+      });
+    }
+  }
+  
+  return options;
+};

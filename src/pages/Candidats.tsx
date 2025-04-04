@@ -33,9 +33,11 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { SECTEURS } from "@/services/commandesService";
 
 interface Candidat {
   id: string;
@@ -50,15 +52,8 @@ interface Candidat {
   secteurs: string[];
 }
 
-const secteurOptions = [
-  { id: "cuisine", label: "Cuisine" },
-  { id: "salle", label: "Salle" },
-  { id: "plonge", label: "Plonge" },
-  { id: "reception", label: "Réception" },
-  { id: "etages", label: "Étages" },
-];
-
 const formSchema = z.object({
+  id: z.string().optional(),
   nom: z.string().min(1, { message: "Le nom est requis" }),
   prenom: z.string().min(1, { message: "Le prénom est requis" }),
   email: z.string().email({ message: "Email invalide" }).optional().or(z.literal("")),
@@ -77,10 +72,12 @@ const Candidats = () => {
   const [loading, setLoading] = useState(true);
   const [recherche, setRecherche] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      id: "",
       nom: "",
       prenom: "",
       email: "",
@@ -114,25 +111,80 @@ const Candidats = () => {
     }
   };
 
-  // Create a new candidat
-  const createCandidat = async (values: FormValues) => {
+  // Create or update a candidat
+  const saveCandidat = async (values: FormValues) => {
     try {
-      const { error } = await supabase
-        .from("candidats")
-        .insert([values]);
-      
-      if (error) {
-        throw error;
+      if (isEditing && values.id) {
+        // Update existing candidat
+        const { id, ...candidatData } = values;
+        const { error } = await supabase
+          .from("candidats")
+          .update(candidatData)
+          .eq("id", id);
+        
+        if (error) {
+          throw error;
+        }
+        
+        toast.success("Candidat modifié avec succès");
+      } else {
+        // Create a new candidat
+        const { id, ...candidatData } = values;
+        const { error } = await supabase
+          .from("candidats")
+          .insert([candidatData]);
+        
+        if (error) {
+          throw error;
+        }
+        
+        toast.success("Candidat créé avec succès");
       }
       
-      toast.success("Candidat créé avec succès");
       form.reset();
       setDialogOpen(false);
+      setIsEditing(false);
       fetchCandidats(); // Refresh candidat list
     } catch (error) {
-      console.error("Erreur lors de la création du candidat:", error);
-      toast.error("Erreur lors de la création du candidat");
+      console.error("Erreur lors de la sauvegarde du candidat:", error);
+      toast.error(`Erreur lors de la ${isEditing ? 'modification' : 'création'} du candidat`);
     }
+  };
+
+  // Edit candidat
+  const handleEdit = (candidat: Candidat) => {
+    setIsEditing(true);
+    form.reset({
+      id: candidat.id,
+      nom: candidat.nom,
+      prenom: candidat.prenom,
+      email: candidat.email || "",
+      telephone: candidat.telephone || "",
+      vehicule: candidat.vehicule,
+      prioritaire: candidat.prioritaire,
+      actif: candidat.actif,
+      commentaire: candidat.commentaire || "",
+      secteurs: candidat.secteurs || [],
+    });
+    setDialogOpen(true);
+  };
+
+  // Handle new candidat button
+  const handleNewCandidat = () => {
+    setIsEditing(false);
+    form.reset({
+      id: "",
+      nom: "",
+      prenom: "",
+      email: "",
+      telephone: "",
+      vehicule: false,
+      prioritaire: false,
+      actif: true,
+      commentaire: "",
+      secteurs: [],
+    });
+    setDialogOpen(true);
   };
 
   useEffect(() => {
@@ -146,7 +198,7 @@ const Candidats = () => {
   );
 
   const onSubmit = (values: FormValues) => {
-    createCandidat(values);
+    saveCandidat(values);
   };
 
   return (
@@ -156,21 +208,39 @@ const Candidats = () => {
         
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={handleNewCandidat}>
               <Plus className="mr-2 h-4 w-4" />
               Nouveau candidat
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[550px]">
             <DialogHeader>
-              <DialogTitle>Créer un nouveau candidat</DialogTitle>
+              <DialogTitle>{isEditing ? 'Modifier le candidat' : 'Créer un nouveau candidat'}</DialogTitle>
               <DialogDescription>
-                Remplissez le formulaire ci-dessous pour ajouter un nouveau candidat.
+                {isEditing 
+                  ? 'Modifiez les informations du candidat ci-dessous.' 
+                  : 'Remplissez le formulaire ci-dessous pour ajouter un nouveau candidat.'}
               </DialogDescription>
             </DialogHeader>
             
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                {isEditing && (
+                  <FormField
+                    control={form.control}
+                    name="id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ID</FormLabel>
+                        <FormControl>
+                          <Input placeholder="ID" {...field} disabled className="bg-gray-100" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -234,26 +304,26 @@ const Candidats = () => {
                 <div className="space-y-2">
                   <h3 className="font-medium text-sm">Secteurs d'activité</h3>
                   <div className="grid grid-cols-2 gap-2">
-                    {secteurOptions.map((option) => (
+                    {SECTEURS.map((secteur) => (
                       <FormField
-                        key={option.id}
+                        key={secteur}
                         control={form.control}
                         name="secteurs"
                         render={({ field }) => (
                           <FormItem className="flex items-center space-x-3 space-y-0">
                             <FormControl>
                               <Checkbox
-                                checked={field.value?.includes(option.label)}
+                                checked={field.value?.includes(secteur)}
                                 onCheckedChange={(checked) => {
                                   const updatedValue = checked
-                                    ? [...field.value, option.label]
-                                    : field.value.filter((value) => value !== option.label);
+                                    ? [...field.value, secteur]
+                                    : field.value.filter((value) => value !== secteur);
                                   field.onChange(updatedValue);
                                 }}
                               />
                             </FormControl>
                             <FormLabel className="cursor-pointer text-sm font-normal">
-                              {option.label}
+                              {secteur}
                             </FormLabel>
                           </FormItem>
                         )}
@@ -267,16 +337,18 @@ const Candidats = () => {
                     control={form.control}
                     name="vehicule"
                     render={({ field }) => (
-                      <FormItem className="flex items-center space-x-3 space-y-0">
+                      <FormItem className="flex flex-row items-center justify-between space-x-3 space-y-0 rounded-md border p-4">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-sm font-normal">
+                            Véhicule
+                          </FormLabel>
+                        </div>
                         <FormControl>
-                          <Checkbox
+                          <Switch
                             checked={field.value}
                             onCheckedChange={field.onChange}
                           />
                         </FormControl>
-                        <FormLabel className="cursor-pointer text-sm font-normal">
-                          Véhicule
-                        </FormLabel>
                       </FormItem>
                     )}
                   />
@@ -335,7 +407,7 @@ const Candidats = () => {
                 <DialogFooter className="pt-4">
                   <Button type="submit" disabled={form.formState.isSubmitting}>
                     {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Créer le candidat
+                    {isEditing ? 'Modifier le candidat' : 'Créer le candidat'}
                   </Button>
                 </DialogFooter>
               </form>
@@ -406,7 +478,7 @@ const Candidats = () => {
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon">
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(candidat)}>
                       <Edit className="h-4 w-4" />
                     </Button>
                   </TableCell>

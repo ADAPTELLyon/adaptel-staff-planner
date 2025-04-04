@@ -9,7 +9,196 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      candidats: {
+        Row: {
+          actif: boolean | null
+          commentaire: string | null
+          created_at: string
+          email: string | null
+          id: string
+          nom: string
+          prenom: string
+          prioritaire: boolean | null
+          secteurs: string[] | null
+          telephone: string | null
+          updated_at: string
+          vehicule: boolean | null
+        }
+        Insert: {
+          actif?: boolean | null
+          commentaire?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          nom: string
+          prenom: string
+          prioritaire?: boolean | null
+          secteurs?: string[] | null
+          telephone?: string | null
+          updated_at?: string
+          vehicule?: boolean | null
+        }
+        Update: {
+          actif?: boolean | null
+          commentaire?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          nom?: string
+          prenom?: string
+          prioritaire?: boolean | null
+          secteurs?: string[] | null
+          telephone?: string | null
+          updated_at?: string
+          vehicule?: boolean | null
+        }
+        Relationships: []
+      }
+      clients: {
+        Row: {
+          adresse: string | null
+          contact_email: string | null
+          contact_nom: string | null
+          contact_prenom: string | null
+          contact_telephone: string | null
+          created_at: string
+          email: string | null
+          groupe_client: string | null
+          id: string
+          nom: string
+          secteur: string | null
+          telephone: string | null
+          updated_at: string
+          ville: string | null
+        }
+        Insert: {
+          adresse?: string | null
+          contact_email?: string | null
+          contact_nom?: string | null
+          contact_prenom?: string | null
+          contact_telephone?: string | null
+          created_at?: string
+          email?: string | null
+          groupe_client?: string | null
+          id?: string
+          nom: string
+          secteur?: string | null
+          telephone?: string | null
+          updated_at?: string
+          ville?: string | null
+        }
+        Update: {
+          adresse?: string | null
+          contact_email?: string | null
+          contact_nom?: string | null
+          contact_prenom?: string | null
+          contact_telephone?: string | null
+          created_at?: string
+          email?: string | null
+          groupe_client?: string | null
+          id?: string
+          nom?: string
+          secteur?: string | null
+          telephone?: string | null
+          updated_at?: string
+          ville?: string | null
+        }
+        Relationships: []
+      }
+      commande_jours: {
+        Row: {
+          candidat: string | null
+          commande_id: string | null
+          couleur_fond: string | null
+          couleur_texte: string | null
+          created_at: string
+          creneaux: string[] | null
+          id: string
+          jour_date: string
+          jour_semaine: number
+          statut: string | null
+          updated_at: string
+        }
+        Insert: {
+          candidat?: string | null
+          commande_id?: string | null
+          couleur_fond?: string | null
+          couleur_texte?: string | null
+          created_at?: string
+          creneaux?: string[] | null
+          id?: string
+          jour_date: string
+          jour_semaine: number
+          statut?: string | null
+          updated_at?: string
+        }
+        Update: {
+          candidat?: string | null
+          commande_id?: string | null
+          couleur_fond?: string | null
+          couleur_texte?: string | null
+          created_at?: string
+          creneaux?: string[] | null
+          id?: string
+          jour_date?: string
+          jour_semaine?: number
+          statut?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commande_jours_commande_id_fkey"
+            columns: ["commande_id"]
+            isOneToOne: false
+            referencedRelation: "commandes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commandes: {
+        Row: {
+          annee: number
+          client_id: string | null
+          client_nom: string
+          created_at: string
+          id: string
+          secteur: string | null
+          semaine: number
+          statut: string
+          updated_at: string
+        }
+        Insert: {
+          annee: number
+          client_id?: string | null
+          client_nom: string
+          created_at?: string
+          id?: string
+          secteur?: string | null
+          semaine: number
+          statut: string
+          updated_at?: string
+        }
+        Update: {
+          annee?: number
+          client_id?: string | null
+          client_nom?: string
+          created_at?: string
+          id?: string
+          secteur?: string | null
+          semaine?: number
+          statut?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commandes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

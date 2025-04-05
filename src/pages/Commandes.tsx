@@ -331,15 +331,18 @@ const Commandes = () => {
         </div>
       </div>
       
-      <div className="bg-white rounded-lg shadow overflow-auto">
-        <table className="min-w-full border-collapse">
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="min-w-full border-collapse table-fixed">
           <thead>
             <tr className="bg-gray-50">
-              <th className="p-3 text-sm font-medium text-gray-600 w-[200px] text-center align-middle border-r border-gray-200">
+              <th className="p-3 text-sm font-medium text-gray-600 w-[200px] text-center align-middle border-r border-gray-200 sticky left-0 z-10 bg-gray-50">
                 Semaine {currentWeek}
               </th>
               {weekDates.map((day, index) => (
-                <th key={index} className="p-3 text-center text-sm font-medium text-gray-600 w-[150px] border-r border-gray-200">
+                <th 
+                  key={index} 
+                  className="p-3 text-center text-sm font-medium text-gray-600 w-[140px] border-r border-gray-200"
+                >
                   <div className="text-center">{day.jourNom} {day.numero} {day.mois}</div>
                   <div className="h-6 mt-1 flex justify-center">
                     {day.enRecherche > 0 && (
@@ -360,8 +363,8 @@ const Commandes = () => {
               </tr>
             ) : filteredCommandes.length > 0 ? (
               filteredCommandes.map((commande) => (
-                <tr key={commande.id} className="h-[120px]">
-                  <td className="p-3 align-top border-r border-gray-200">
+                <tr key={commande.id} className="h-24">
+                  <td className="p-3 align-top border-r border-gray-200 sticky left-0 z-10 bg-white">
                     <div className="flex flex-col justify-between h-full">
                       <div>
                         <div className="font-medium">{commande.client_nom}</div>
@@ -390,18 +393,18 @@ const Commandes = () => {
                     return (
                       <td 
                         key={dayIndex} 
-                        className="p-2 align-top relative border-r border-gray-200 w-[150px]"
+                        className="p-2 border-r border-gray-200 h-24 w-[140px] align-top"
                       >
                         {jour ? (
                           <div 
-                            className={`${getDayClass(jour)} rounded cursor-pointer p-3 h-full flex flex-col relative`}
+                            className={`h-full w-full rounded p-2 relative cursor-pointer ${getDayClass(jour)}`}
                             onClick={() => handleMissionEdit(commande, jour)}
                           >
-                            <div className="text-sm font-medium mb-2">
+                            <div className="text-sm font-medium mb-auto">
                               {jour.statut}
                             </div>
                             
-                            <div className="space-y-1 text-xs flex-grow">
+                            <div className="mt-auto space-y-1 text-xs">
                               {jour.creneaux && jour.creneaux.length > 0 && (
                                 <div className="text-xs font-mono">
                                   {jour.creneaux[0]?.split('-').join(' - ')}
@@ -413,13 +416,13 @@ const Commandes = () => {
                                   {jour.creneaux[1]?.split('-').join(' - ')}
                                 </div>
                               )}
+                              
+                              {jour.candidat && (
+                                <div className="text-sm mt-1 font-medium">
+                                  {jour.candidat}
+                                </div>
+                              )}
                             </div>
-                            
-                            {jour.candidat && (
-                              <div className="text-sm mt-auto font-medium">
-                                {jour.candidat}
-                              </div>
-                            )}
                             
                             <Button 
                               size="sm" 

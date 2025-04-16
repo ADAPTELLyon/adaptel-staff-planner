@@ -234,6 +234,32 @@ export type Database = {
         }
         Relationships: []
       }
+      parametrages: {
+        Row: {
+          id: string;
+          categorie: string | null;
+          valeur: string | null;
+          description: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          categorie?: string | null;
+          valeur?: string | null;
+          description?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          categorie?: string | null;
+          valeur?: string | null;
+          description?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+      }
     }
     Views: {
       [_ in never]: never

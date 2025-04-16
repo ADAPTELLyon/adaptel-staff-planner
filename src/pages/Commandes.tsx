@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import CommandeForm from "@/components/commandes/CommandeForm";
 import NotificationBadge from "@/components/commandes/NotificationBadge";
+import { Layout } from "@/components/layout/Layout";
 
 const joursSemaine = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 
@@ -59,7 +60,7 @@ const Commandes = () => {
       setSearchQuery("");
     } else {
       setCurrentWeek(true);
-      setSelectedSecteur("Étages");
+      setSelectedSecteur("Cuisine");
       setSelectedSemaine(getCurrentWeek());
       setSearchQuery("");
     }
@@ -138,247 +139,249 @@ const Commandes = () => {
   };
 
   return (
-    <div className="p-6 bg-[#f8f8f8] min-h-screen">
-      {/* SECTION FIXE */}
-      <div className="fixed top-16 left-0 right-0 bg-white border-b shadow-lg p-6 z-30">
-        <div className="max-w-[calc(100vw-3rem)] mx-auto">
-          <div className="flex items-center justify-start gap-4 flex-wrap">
-            {indicateurs.map((ind) => (
-              <Card key={ind.nom} className="shadow-md w-[150px]" style={{ backgroundColor: ind.couleur }}>
-                <CardContent className="py-4 px-3">
-                  <div className="text-sm font-semibold">{ind.nom}</div>
-                  <div className="text-2xl font-bold">{ind.valeur}</div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <div className="w-[620px] mt-4">
-            <div className="relative bg-white rounded-md h-6 border">
-              <div className={`h-full rounded-md absolute top-0 left-0 ${isComplete ? "bg-[#4CAF50] w-full" : "bg-[#f1c232]"}`} style={{ width: `${progressValue}%` }}></div>
-              <div className="absolute inset-0 flex items-center justify-center text-sm font-semibold">
-                {isComplete ? "Complet" : `${progressValue}%`}
+    <Layout>
+      <div className="p-6 bg-[#f8f8f8] min-h-screen">
+        {/* SECTION FIXE */}
+        <div className="fixed top-16 left-0 right-0 bg-white border-b shadow-lg p-6 z-30">
+          <div className="max-w-[calc(100vw-3rem)] mx-auto">
+            <div className="flex items-center justify-start gap-4 flex-wrap">
+              {indicateurs.map((ind) => (
+                <Card key={ind.nom} className="shadow-md w-[150px]" style={{ backgroundColor: ind.couleur }}>
+                  <CardContent className="py-4 px-3">
+                    <div className="text-sm font-semibold">{ind.nom}</div>
+                    <div className="text-2xl font-bold">{ind.valeur}</div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            <div className="w-[620px] mt-4">
+              <div className="relative bg-white rounded-md h-6 border">
+                <div className={`h-full rounded-md absolute top-0 left-0 ${isComplete ? "bg-[#4CAF50] w-full" : "bg-[#f1c232]"}`} style={{ width: `${progressValue}%` }}></div>
+                <div className="absolute inset-0 flex items-center justify-center text-sm font-semibold">
+                  {isComplete ? "Complet" : `${progressValue}%`}
+                </div>
               </div>
             </div>
-          </div>
-          <div className="flex items-center gap-4 flex-wrap mt-4">
-            {SECTEURS.map((secteur) => (
-              <Button 
-                key={secteur} 
-                variant={selectedSecteur === secteur ? "default" : "outline"} 
-                className={`w-[130px] justify-start ${selectedSecteur === secteur ? "bg-[#840404] text-white" : ""}`} 
-                onClick={() => !showAll && setSelectedSecteur(secteur)}
+            <div className="flex items-center gap-4 flex-wrap mt-4">
+              {SECTEURS.map((secteur) => (
+                <Button 
+                  key={secteur} 
+                  variant={selectedSecteur === secteur ? "default" : "outline"} 
+                  className={`w-[130px] justify-start ${selectedSecteur === secteur ? "bg-[#840404] text-white" : ""}`} 
+                  onClick={() => !showAll && setSelectedSecteur(secteur)}
+                  disabled={showAll}
+                >
+                  {secteur}
+                </Button>
+              ))}
+              <div className="w-px h-10 bg-gray-300 mx-2"></div>
+              <Select value={selectedSemaine} onValueChange={setSelectedSemaine}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Semaine" />
+                </SelectTrigger>
+                <SelectContent>
+                  {["14", "15", "16"].map((week) => (
+                    <SelectItem key={week} value={week}>Semaine {week}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select 
+                value={selectedClient} 
+                onValueChange={setSelectedClient}
                 disabled={showAll}
               >
-                {secteur}
-              </Button>
-            ))}
-            <div className="w-px h-10 bg-gray-300 mx-2"></div>
-            <Select value={selectedSemaine} onValueChange={setSelectedSemaine}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Semaine" />
-              </SelectTrigger>
-              <SelectContent>
-                {["14", "15", "16"].map((week) => (
-                  <SelectItem key={week} value={week}>Semaine {week}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select 
-              value={selectedClient} 
-              onValueChange={setSelectedClient}
-              disabled={showAll}
-            >
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Sélectionner un client" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="tous">Tous les clients</SelectItem>
-                {uniqueClients.map(client => (
-                  <SelectItem key={client.id} value={client.id}>
-                    {client.nom}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-6 mt-4">
-            {[
-              { 
-                id: "semaine-courante", 
-                label: "Semaine en cours", 
-                checked: currentWeek, 
-                onChange: setCurrentWeek,
-                disabled: showAll
-              }, 
-              { 
-                id: "en-recherche", 
-                label: "En recherche", 
-                checked: inSearch, 
-                onChange: setInSearch,
-                disabled: showAll
-              }, 
-              { 
-                id: "tout-afficher", 
-                label: "Tout afficher", 
-                checked: showAll, 
-                onChange: setShowAll
-              }
-            ].map((item) => (
-              <div key={item.id} className="flex items-center space-x-2">
-                <Switch 
-                  id={item.id} 
-                  checked={item.checked} 
-                  onCheckedChange={item.onChange} 
-                  className="data-[state=checked]:bg-[#840404]"
-                  disabled={item.disabled}
-                />
-                <label htmlFor={item.id} className="text-sm">{item.label}</label>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-4 mt-4">
-            <div className="flex gap-2">
-              <Button 
-                className="bg-[#840404] text-white"
-                onClick={() => setNewCommandeDialogOpen(true)}
-              >
-                <Plus className="w-4 h-4 mr-1" /> Nouvelle commande
-              </Button>
-              <Button variant="outline">Saisir disponibilités</Button>
-              <Button variant="outline">Saisir incident</Button>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Sélectionner un client" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tous">Tous les clients</SelectItem>
+                  {uniqueClients.map(client => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.nom}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <Input placeholder="Rechercher un client ou un candidat..." className="w-[240px]" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            <div className="flex items-center gap-6 mt-4">
+              {[
+                { 
+                  id: "semaine-courante", 
+                  label: "Semaine en cours", 
+                  checked: currentWeek, 
+                  onChange: setCurrentWeek,
+                  disabled: showAll
+                }, 
+                { 
+                  id: "en-recherche", 
+                  label: "En recherche", 
+                  checked: inSearch, 
+                  onChange: setInSearch,
+                  disabled: showAll
+                }, 
+                { 
+                  id: "tout-afficher", 
+                  label: "Tout afficher", 
+                  checked: showAll, 
+                  onChange: setShowAll
+                }
+              ].map((item) => (
+                <div key={item.id} className="flex items-center space-x-2">
+                  <Switch 
+                    id={item.id} 
+                    checked={item.checked} 
+                    onCheckedChange={item.onChange} 
+                    className="data-[state=checked]:bg-[#840404]"
+                    disabled={item.disabled}
+                  />
+                  <label htmlFor={item.id} className="text-sm">{item.label}</label>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-4 mt-4">
+              <div className="flex gap-2">
+                <Button 
+                  className="bg-[#840404] text-white"
+                  onClick={() => setNewCommandeDialogOpen(true)}
+                >
+                  <Plus className="w-4 h-4 mr-1" /> Nouvelle commande
+                </Button>
+                <Button variant="outline">Saisir disponibilités</Button>
+                <Button variant="outline">Saisir incident</Button>
+              </div>
+              <Input placeholder="Rechercher un client ou un candidat..." className="w-[240px]" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* SECTION TABLEAU */}
-      <div className="mt-[calc(20rem+1px)]">
-        <section className="bg-white border rounded-xl shadow-lg p-6">
-          <div className="relative">
-            {/* EN-TÊTE FIXE */}
-            <div className="sticky top-[calc(20rem+1px)] z-20">
-              <div className="grid grid-cols-[250px_repeat(7,_minmax(0,_1fr))] min-w-full">
-                <div className="bg-gray-800 text-white text-center font-semibold py-3 border-r">Semaine {selectedSemaine}</div>
-                {joursSemaine.map((jour, i) => (
-                  <div key={i} className="bg-gray-800 text-white text-center font-semibold py-3 border-r relative">
-                    <div className="mb-2">{getFormattedDate(i)}</div>
-                    <div className="absolute -top-4 right-3 z-10">
-                      {getEnRechercheCountByDay(i) > 0 ? (
-                        <div className="bg-[#ffe599] text-black text-xs font-medium w-6 h-6 rounded-full flex items-center justify-center shadow-sm">
-                          {getEnRechercheCountByDay(i)}
-                        </div>
-                      ) : (
-                        <div className="bg-[#d9ead3] text-green-800 text-xs font-medium w-6 h-6 rounded-full flex items-center justify-center shadow-sm">
-                          <Check className="w-3 h-3" />
-                        </div>
-                      )}
+        {/* SECTION TABLEAU */}
+        <div className="mt-[calc(20rem+1px)]">
+          <section className="bg-white border rounded-xl shadow-lg p-6">
+            <div className="relative">
+              {/* EN-TÊTE FIXE */}
+              <div className="sticky top-[calc(20rem+1px)] z-20">
+                <div className="grid grid-cols-[250px_repeat(7,_minmax(0,_1fr))] min-w-full">
+                  <div className="bg-gray-800 text-white text-center font-semibold py-3 border-r">Semaine {selectedSemaine}</div>
+                  {joursSemaine.map((jour, i) => (
+                    <div key={i} className="bg-gray-800 text-white text-center font-semibold py-3 border-r relative">
+                      <div className="mb-2">{getFormattedDate(i)}</div>
+                      <div className="absolute -top-4 right-3 z-10">
+                        {getEnRechercheCountByDay(i) > 0 ? (
+                          <div className="bg-[#ffe599] text-black text-xs font-medium w-6 h-6 rounded-full flex items-center justify-center shadow-sm">
+                            {getEnRechercheCountByDay(i)}
+                          </div>
+                        ) : (
+                          <div className="bg-[#d9ead3] text-green-800 text-xs font-medium w-6 h-6 rounded-full flex items-center justify-center shadow-sm">
+                            <Check className="w-3 h-3" />
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* CONTENU DU TABLEAU */}
-            <div className="overflow-y-auto max-h-[calc(100vh-20rem)]">
-              <div className="grid grid-cols-[250px_repeat(7,_minmax(0,_1fr))] min-w-full">
-                {filteredCommandes.map((commande, rowIdx) => (
-                  <React.Fragment key={commande.id}>
-                    <div className="bg-white border-b border-r p-3 sticky left-0 z-10">
-                      <div className="flex justify-between items-center">
-                        <div className="font-medium text-sm">{commande.client_nom}</div>
-                        <Edit className="w-4 h-4 text-gray-500" />
-                      </div>
-                      {commande.secteur && (
-                        <Badge 
-                          variant="outline" 
-                          className="mt-1.5 bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-50"
-                        >
-                          {commande.secteur === "Cuisine" && <ChefHat className="w-3.5 h-3.5 mr-1.5" />}
-                          {commande.secteur === "Salle" && <UtensilsCrossed className="w-3.5 h-3.5 mr-1.5" />}
-                          {commande.secteur === "Étages" && <Bed className="w-3.5 h-3.5 mr-1.5" />}
-                          {commande.secteur === "Plonge" && <GlassWater className="w-3.5 h-3.5 mr-1.5" />}
-                          {commande.secteur === "Réception" && <Bell className="w-3.5 h-3.5 mr-1.5" />}
-                          {commande.secteur}
-                        </Badge>
-                      )}
-                      <div className="flex justify-between items-center text-xs mt-1">
-                        <span>Semaine {commande.semaine}</span>
-                        <div className="flex items-center gap-1">
-                          <Share2 className="w-4 h-4 text-gray-400" />
-                          <div className="w-2 h-2 rounded-full bg-gray-400"></div>
+              {/* CONTENU DU TABLEAU */}
+              <div className="overflow-y-auto max-h-[calc(100vh-20rem)]">
+                <div className="grid grid-cols-[250px_repeat(7,_minmax(0,_1fr))] min-w-full">
+                  {filteredCommandes.map((commande, rowIdx) => (
+                    <React.Fragment key={commande.id}>
+                      <div className="bg-white border-b border-r p-3 sticky left-0 z-10">
+                        <div className="flex justify-between items-center">
+                          <div className="font-medium text-sm">{commande.client_nom}</div>
+                          <Edit className="w-4 h-4 text-gray-500" />
                         </div>
-                      </div>
-                    </div>
-                    {joursSemaine.map((_, jIdx) => {
-                      const jour = commande.jours?.find(j => j.jour_semaine === jIdx + 1);
-                      const couleur = jour ? getStatusColors(jour.statut === "Validé" ? "Validé" : jour.statut) : getStatusColors("Vide");
-                      return (
-                        <div key={jIdx} className="bg-white border-b p-1">
-                          <div className="rounded-lg px-2 py-2 h-full w-full text-xs" style={{ backgroundColor: couleur.couleur_fond, color: couleur.couleur_texte }}>
-                            {jour ? (
-                              <div className="h-full flex flex-col min-h-[80px]">
-                                <div className="flex justify-between items-start">
-                                  <div className="flex-1">
-                                    {jour.statut === "Validé" ? (
-                                      <>
-                                        <div className="text-sm font-medium truncate">{jour.candidat?.split(' ')[0]}</div>
-                                        <div className="text-sm font-medium truncate">{jour.candidat?.split(' ').slice(1).join(' ')}</div>
-                                      </>
-                                    ) : (
-                                      <div className="text-sm font-medium truncate">{jour.statut}</div>
-                                    )}
-                                  </div>
-                                  <PlusCircle className="w-4 h-4 text-black opacity-60 flex-shrink-0" />
-                                </div>
-                                <div className="flex-1 flex flex-col justify-center space-y-1 mt-1">
-                                  {jour.creneaux?.[0] ? (
-                                    <div className="flex justify-between items-center text-xs font-mono">
-                                      <span>{jour.creneaux[0].split(' - ')[0]}</span>
-                                      <span>{jour.creneaux[0].split(' - ')[1]}</span>
-                                    </div>
-                                  ) : (
-                                    <div className="text-xs font-mono">-</div>
-                                  )}
-                                  {jour.creneaux?.[1] ? (
-                                    <div className="flex justify-between items-center text-xs font-mono">
-                                      <span>{jour.creneaux[1].split(' - ')[0]}</span>
-                                      <span>{jour.creneaux[1].split(' - ')[1]}</span>
-                                    </div>
-                                  ) : (
-                                    <div className="text-xs font-mono">-</div>
-                                  )}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="h-full flex items-center justify-center min-h-[80px] text-gray-400">-</div>
-                            )}
+                        {commande.secteur && (
+                          <Badge 
+                            variant="outline" 
+                            className="mt-1.5 bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-50"
+                          >
+                            {commande.secteur === "Cuisine" && <ChefHat className="w-3.5 h-3.5 mr-1.5" />}
+                            {commande.secteur === "Salle" && <UtensilsCrossed className="w-3.5 h-3.5 mr-1.5" />}
+                            {commande.secteur === "Étages" && <Bed className="w-3.5 h-3.5 mr-1.5" />}
+                            {commande.secteur === "Plonge" && <GlassWater className="w-3.5 h-3.5 mr-1.5" />}
+                            {commande.secteur === "Réception" && <Bell className="w-3.5 h-3.5 mr-1.5" />}
+                            {commande.secteur}
+                          </Badge>
+                        )}
+                        <div className="flex justify-between items-center text-xs mt-1">
+                          <span>Semaine {commande.semaine}</span>
+                          <div className="flex items-center gap-1">
+                            <Share2 className="w-4 h-4 text-gray-400" />
+                            <div className="w-2 h-2 rounded-full bg-gray-400"></div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </React.Fragment>
-                ))}
+                      </div>
+                      {joursSemaine.map((_, jIdx) => {
+                        const jour = commande.jours?.find(j => j.jour_semaine === jIdx + 1);
+                        const couleur = jour ? getStatusColors(jour.statut === "Validé" ? "Validé" : jour.statut) : getStatusColors("Vide");
+                        return (
+                          <div key={jIdx} className="bg-white border-b p-1">
+                            <div className="rounded-lg px-2 py-2 h-full w-full text-xs" style={{ backgroundColor: couleur.couleur_fond, color: couleur.couleur_texte }}>
+                              {jour ? (
+                                <div className="h-full flex flex-col min-h-[80px]">
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                      {jour.statut === "Validé" ? (
+                                        <>
+                                          <div className="text-sm font-medium truncate">{jour.candidat?.split(' ')[0]}</div>
+                                          <div className="text-sm font-medium truncate">{jour.candidat?.split(' ').slice(1).join(' ')}</div>
+                                        </>
+                                      ) : (
+                                        <div className="text-sm font-medium truncate">{jour.statut}</div>
+                                      )}
+                                    </div>
+                                    <PlusCircle className="w-4 h-4 text-black opacity-60 flex-shrink-0" />
+                                  </div>
+                                  <div className="flex-1 flex flex-col justify-center space-y-1 mt-1">
+                                    {jour.creneaux?.[0] ? (
+                                      <div className="flex justify-between items-center text-xs font-mono">
+                                        <span>{jour.creneaux[0].split(' - ')[0]}</span>
+                                        <span>{jour.creneaux[0].split(' - ')[1]}</span>
+                                      </div>
+                                    ) : (
+                                      <div className="text-xs font-mono">-</div>
+                                    )}
+                                    {jour.creneaux?.[1] ? (
+                                      <div className="flex justify-between items-center text-xs font-mono">
+                                        <span>{jour.creneaux[1].split(' - ')[0]}</span>
+                                        <span>{jour.creneaux[1].split(' - ')[1]}</span>
+                                      </div>
+                                    ) : (
+                                      <div className="text-xs font-mono">-</div>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="h-full flex items-center justify-center min-h-[80px] text-gray-400">-</div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        </section>
-      </div>
+          </section>
+        </div>
 
-      <Dialog open={newCommandeDialogOpen} onOpenChange={(open) => {
-        setNewCommandeDialogOpen(open);
-        if (!open) {
-          fetchCommandes();
-        }
-      }}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Nouvelle commande</DialogTitle>
-          </DialogHeader>
-          <CommandeForm onClose={() => setNewCommandeDialogOpen(false)} />
-        </DialogContent>
-      </Dialog>
-    </div>
+        <Dialog open={newCommandeDialogOpen} onOpenChange={(open) => {
+          setNewCommandeDialogOpen(open);
+          if (!open) {
+            fetchCommandes();
+          }
+        }}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Nouvelle commande</DialogTitle>
+            </DialogHeader>
+            <CommandeForm onClose={() => setNewCommandeDialogOpen(false)} />
+          </DialogContent>
+        </Dialog>
+      </div>
+    </Layout>
   );
 };
 

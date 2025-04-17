@@ -1,6 +1,7 @@
+
 import * as React from "react";
 import { useState } from "react";
-import { supabase } from "../lib/supabaseClient";
+import { supabase } from "@/lib/supabaseclient";
 import { useNavigate } from "react-router-dom";
 
 export default function LoginPage() {
